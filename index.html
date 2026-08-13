@@ -25,8 +25,8 @@
 
     .score-badge { padding: 8px 16px; border-radius: 20px; font-weight: bold; font-size: 20px; }
     .score-high { background: #089981; color: #fff; }
-    .score-low { background: #f23645; color: #fff; }
     .score-mid { background: #e2a000; color: #fff; }
+    .score-low { background: #f23645; color: #fff; }
     
     .plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-top: 12px; text-align: center; }
     .plan-box { background: #2a2e39; padding: 10px; border-radius: 6px; }
@@ -48,11 +48,10 @@
     .quote-down { background: rgba(242, 54, 69, 0.2); color: #f23645; border: 1px solid #f23645; }
 
     .news-item { padding: 10px 0; border-bottom: 1px solid #2a2e39; font-size: 14px; display: flex; justify-content: space-between; gap: 15px; align-items: center; }
-    .news-link { color: #58a6ff; text-decoration: underline; font-weight: 500; }
+    .news-link { color: #58a6ff; text-decoration: underline; font-weight: 500; cursor: pointer; }
     .news-link:hover { color: #79c0ff; }
     .news-date { color: #787b86; white-space: nowrap; font-size: 12px; }
 
-    /* 炫酷開機過場畫面樣式 */
     #splash-screen {
       position: fixed;
       top: 0;
@@ -117,7 +116,6 @@
 </head>
 <body>
 
-<!-- 炫酷開機過場畫面 HTML -->
 <div id="splash-screen">
   <div class="splash-content">
     <div class="splash-logo">TRADING <span>HELPER</span></div>
@@ -154,7 +152,7 @@
       <button onclick="analyzeStock()">開始量化跑分</button>
       <button class="btn-log" onclick="downloadLogs()">📥 下載運行 Log</button>
     </div>
-    <span style="font-size: 12px; color: #787b86;">TRADING HELPER：內建即時記錄與 Log 匯出功能</span>
+    <span style="font-size: 12px; color: #787b86;">TRADING HELPER：新聞超連結修復 + 數學閉環總分</span>
   </div>
 
   <div id="loading" class="loading">⏳ 正在同步技術面、基本面與最新新聞情報...</div>
@@ -167,7 +165,7 @@
           <span id="quoteInfo" class="quote-badge"></span>
           <span style="font-size: 18px; margin-left: 15px;" id="signalText"></span>
         </h3>
-        <p style="font-size: 13px; color: #787b86; margin-top: 4px;">TRADING HELPER 量化評分系統 | 智慧多空指引與殖利率校正</p>
+        <p style="font-size: 13px; color: #787b86; margin-top: 4px;">TRADING HELPER 量化評分系統 | 總分與明細 100% 數學一致</p>
       </div>
       <div id="scoreBadge" class="score-badge"></div>
     </div>
@@ -251,7 +249,6 @@
     URL.revokeObjectURL(url);
   }
 
-  // 強制至少停留 1.2 秒的開機動畫計時器
   window.addEventListener('load', () => {
     addLog('INFO', '應用程式啟動，載入開機過場動畫');
     const fill = document.getElementById('loadingBarFill');
@@ -521,17 +518,25 @@
       quoteInfo.className = `quote-badge ${isUp ? 'quote-up' : 'quote-down'}`;
       quoteInfo.innerText = `$${q.close} (${isUp ? '+' : ''}${q.change}, ${isUp ? '+' : ''}${q.change_pct}%)`;
 
-      const f = data.fundamental;
-      document.getElementById('fundPE').innerText = f.pe_ratio;
-      document.getElementById('fundPB').innerText = f.pb_ratio;
-      document.getElementById('fundYield').innerText = f.div_yield;
+      const f = data.fundamental || {};
+      document.getElementById('fundPE').innerText = f.pe_ratio || 'N/F';
+      document.getElementById('fundPB').innerText = f.pb_ratio || 'N/F';
+      document.getElementById('fundYield').innerText = f.div_yield || 'N/F';
 
       document.getElementById('chartTitle').innerText = `📉 ${displayName} K 線圖`;
 
       document.getElementById('signalText').innerText = `[${data.signal}]`;
       const badge = document.getElementById('scoreBadge');
-      badge.innerText = `${data.score} 分`;
-      badge.className = `score-badge ${data.score >= 60 ? 'score-high' : data.score <= 50 ? 'score-low' : 'score-mid'}`;
+      const score = data.score;
+      badge.innerText = `${score} 分`;
+      
+      if (score >= 60) {
+        badge.className = 'score-badge score-high';
+      } else if (score >= 50) {
+        badge.className = 'score-badge score-mid';
+      } else {
+        badge.className = 'score-badge score-low';
+      }
 
       document.getElementById('pEntry').innerText = `$${data.trade_plan.entry}`;
       document.getElementById('pStop').innerText = `$${data.trade_plan.stop_loss}`;
@@ -566,8 +571,9 @@
         data.news.forEach(n => {
           const div = document.createElement('div');
           div.className = 'news-item';
+          // 🛡️ 使用絕對安全的外部 Google 搜尋 URL，避免被當成相對路徑或虛擬路徑
           const googleSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(n.title)}`;
-          div.innerHTML = `<a href="${googleSearchUrl}" target="_blank" class="news-link">${n.title}</a><span class="news-date">${n.date}</span>`;
+          div.innerHTML = `<a href="${googleSearchUrl}" target="_blank" rel="noopener noreferrer" class="news-link">${n.title}</a><span class="news-date">${n.date}</span>`;
           newsList.appendChild(div);
         });
         newsCard.style.display = 'block';
