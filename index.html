@@ -10,8 +10,8 @@
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #131722; color: #d1d4dc; padding: 15px; }
     .container { max-width: 1050px; margin: 0 auto; }
     .card { background: #1e222d; border-radius: 8px; padding: 15px; margin-bottom: 15px; border: 1px solid #2a2e39; }
-    .control-panel { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
-    .inputs-group { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .control-panel { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: flex-start; }
+    .inputs-group { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%; }
     input, button, select { padding: 9px 12px; border-radius: 6px; border: 1px solid #363a45; background: #2a2e39; color: #fff; font-size: 14px; }
     input { width: 90px; }
     button { background: #2962ff; border: none; cursor: pointer; font-weight: bold; color: #fff; }
@@ -152,7 +152,6 @@
       <button onclick="analyzeStock()">開始量化跑分</button>
       <button class="btn-log" onclick="downloadLogs()">📥 下載運行 Log</button>
     </div>
-    <span style="font-size: 12px; color: #787b86;">TRADING HELPER 專業量化終端機</span>
   </div>
 
   <div id="loading" class="loading">⏳ 正在同步技術面、基本面與最新新聞情報...</div>
@@ -570,7 +569,6 @@
         data.news.forEach(n => {
           const div = document.createElement('div');
           div.className = 'news-item';
-          // 🛡️ 強制使用標準絕對路徑 URL，確保點擊時直接開啟外部 Google 搜尋
           const googleSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(n.title)}`;
           div.innerHTML = `<a href="${googleSearchUrl}" target="_blank" rel="noopener noreferrer" class="news-link">${n.title}</a><span class="news-date">${n.date}</span>`;
           newsList.appendChild(div);
