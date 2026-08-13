@@ -44,6 +44,9 @@
     .quote-badge { font-size: 16px; font-weight: bold; padding: 4px 10px; border-radius: 6px; display: inline-block; margin-left: 10px; }
     .quote-up { background: rgba(8, 153, 129, 0.2); color: #089981; border: 1px solid #089981; }
     .quote-down { background: rgba(242, 54, 69, 0.2); color: #f23645; border: 1px solid #f23645; }
+
+    .news-item { padding: 8px 0; border-bottom: 1px solid #2a2e39; font-size: 14px; display: flex; justify-content: space-between; gap: 10px; }
+    .news-date { color: #787b86; white-space: nowrap; font-size: 12px; }
   </style>
 </head>
 <body>
@@ -63,10 +66,10 @@
       </div>
       <button onclick="analyzeStock()">開始量化跑分</button>
     </div>
-    <span style="font-size: 12px; color: #787b86;">SMC 訂單塊 (OB) + 威科夫箱體 + 今日報價實時追蹤</span>
+    <span style="font-size: 12px; color: #787b86;">技術 + 基本面估值 + 最新新聞情報整合</span>
   </div>
 
-  <div id="loading" class="loading">⏳ 正在計算 SMC 樞紐點、威科夫箱體與今日報價...</div>
+  <div id="loading" class="loading">⏳ 正在同步技術面、基本面本益比與最新新聞情報...</div>
 
   <div class="card" id="resultCard" style="display:none;">
     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
@@ -76,11 +79,12 @@
           <span id="quoteInfo" class="quote-badge"></span>
           <span style="font-size: 18px; margin-left: 15px;" id="signalText"></span>
         </h3>
-        <p style="font-size: 13px; color: #787b86; margin-top: 4px;">基準分 50 分 | 包含機構訂單塊壓制警訊與點位規劃</p>
+        <p style="font-size: 13px; color: #787b86; margin-top: 4px;">多維度評分系統 | 結合 SMC 機構訂單塊、本益比與新聞風向</p>
       </div>
       <div id="scoreBadge" class="score-badge"></div>
     </div>
 
+    <!-- 點位與收益規劃 -->
     <div class="plan-grid">
       <div class="plan-box"><div>建議入場位</div><div id="pEntry" style="color:#2962ff;">-</div></div>
       <div class="plan-box"><div>建議硬止損位</div><div id="pStop" style="color:#f23645;">-</div></div>
@@ -88,13 +92,27 @@
       <div class="plan-box"><div>預計收益率</div><div id="pProfit" style="color:#e2a000;">-</div></div>
     </div>
 
+    <!-- 基本面估值摘要 -->
+    <div class="plan-grid" style="margin-top: 10px;">
+      <div class="plan-box"><div>本益比 (PE)</div><div id="fundPE" style="color:#d1d4dc;">-</div></div>
+      <div class="plan-box"><div>股價淨值比 (PB)</div><div id="fundPB" style="color:#d1d4dc;">-</div></div>
+      <div class="plan-box" style="grid-column: span 2;"><div>現金殖利率 (Yield)</div><div id="fundYield" style="color:#089981;">-</div></div>
+    </div>
+
+    <!-- 操盤策略建議 -->
     <div style="margin-top: 15px; padding: 12px; background: #262b38; border-radius: 6px; border-left: 4px solid #2962ff;">
       <h4 style="color: #fff; margin-bottom: 6px;">💡 交易操盤具體策略建議：</h4>
       <p id="strategyAdvice" style="font-size: 14px; color: #d1d4dc; line-height: 1.6;"></p>
     </div>
 
-    <h4 style="margin-top: 18px; color: #fff;">⚖️ 真實指標評分依據明細：</h4>
+    <h4 style="margin-top: 18px; color: #fff;">⚖️ 真實指標與基本面評分依據明細：</h4>
     <div id="reasonsContainer" style="margin-top: 8px;"></div>
+  </div>
+
+  <!-- 最新新聞情報 -->
+  <div class="card" id="newsCard" style="display:none;">
+    <h3 style="color: #fff; margin-bottom: 10px;">📰 最新個股新聞情報與輿論</h3>
+    <div id="newsList"></div>
   </div>
 
   <div class="card" style="position: relative;">
@@ -231,7 +249,6 @@
 
       const timeScale = chart.timeScale();
 
-      // 1. 威科夫箱體定錨在歷史底部的 Canvas 繪製
       if (showWyckoff && rawResponseData.wyckoff_box) {
         const box = rawResponseData.wyckoff_box;
         const y1 = candlestickSeries.priceToCoordinate(box.top);
@@ -243,7 +260,6 @@
             const coord = timeScale.timeToCoordinate(box.startTime);
             if (coord !== null && coord > 0) x1 = coord;
           }
-          // 箱體寬度延伸到畫面中間偏左（涵蓋打底期）
           const x2 = timeScale.timeToCoordinate(rawResponseData.kline[Math.floor(rawResponseData.kline.length / 2)].time) || container.clientWidth / 2;
 
           const rectY = Math.min(y1, y2);
@@ -265,7 +281,6 @@
         }
       }
 
-      // 2. SMC OB 訂單塊
       if (showOB && rawResponseData.smc_boxes) {
         rawResponseData.smc_boxes.forEach(box => {
           if (!box.top || !box.bottom) return;
@@ -309,12 +324,14 @@
     const rr = document.getElementById('rrRatio').value;
     const loading = document.getElementById('loading');
     const resultCard = document.getElementById('resultCard');
+    const newsCard = document.getElementById('newsCard');
 
     if (!stockId) return alert('請輸入股票代碼');
     if (!chart || !candlestickSeries) initChart();
 
     loading.style.display = 'block';
     resultCard.style.display = 'none';
+    newsCard.style.display = 'none';
 
     try {
       const res = await fetch(`${WORKER_URL}/?stock_id=${stockId}&rr=${rr}`);
@@ -339,12 +356,18 @@
       const displayName = data.stock_name ? `${data.stock_id} ${data.stock_name}` : data.stock_id;
       document.getElementById('stockTitle').innerText = displayName;
 
-      // 渲染今日報價與漲跌 badge
+      // 渲染今日報價與漲跌
       const q = data.quote;
       const quoteInfo = document.getElementById('quoteInfo');
       const isUp = q.change >= 0;
       quoteInfo.className = `quote-badge ${isUp ? 'quote-up' : 'quote-down'}`;
       quoteInfo.innerText = `$${q.close} (${isUp ? '+' : ''}${q.change}, ${isUp ? '+' : ''}${q.change_pct}%)`;
+
+      // 渲染基本面數據
+      const f = data.fundamental;
+      document.getElementById('fundPE').innerText = f.pe_ratio;
+      document.getElementById('fundPB').innerText = f.pb_ratio;
+      document.getElementById('fundYield').innerText = f.div_yield;
 
       document.getElementById('chartTitle').innerText = `📉 ${displayName} K 線圖`;
 
@@ -374,6 +397,19 @@
           `;
           reasonsContainer.appendChild(div);
         });
+      }
+
+      // 渲染新聞情報
+      const newsList = document.getElementById('newsList');
+      newsList.innerHTML = '';
+      if (data.news && data.news.length > 0) {
+        data.news.forEach(n => {
+          const div = document.createElement('div');
+          div.className = 'news-item';
+          div.innerHTML = `<span>${n.title}</span><span class="news-date">${n.date}</span>`;
+          newsList.appendChild(div);
+        });
+        newsCard.style.display = 'block';
       }
 
       resultCard.style.display = 'block';
