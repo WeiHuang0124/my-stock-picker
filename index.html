@@ -62,7 +62,7 @@
       justify-content: center;
       align-items: center;
       z-index: 99999;
-      transition: opacity 0.6s ease, visibility 0.6s ease;
+      transition: opacity 0.8s ease, visibility 0.8s ease;
     }
     #splash-screen.fade-out {
       opacity: 0;
@@ -70,7 +70,7 @@
     }
     .splash-content {
       text-align: center;
-      width: 320px;
+      width: 340px;
     }
     .splash-logo {
       font-size: 24px;
@@ -115,10 +115,10 @@
 </head>
 <body>
 
-<!-- 炫酷開機過場畫面 HTML -->
+<!-- 炫酷開機過場畫面 HTML (在此處可自行更改自訂名稱) -->
 <div id="splash-screen">
   <div class="splash-content">
-    <div class="splash-logo">QUANTUM <span>SMC</span></div>
+    <div class="splash-logo">WEI <span>TRADING</span></div>
     <div class="loading-bar-track">
       <div id="loadingBarFill" class="loading-bar-fill"></div>
     </div>
@@ -220,25 +220,33 @@
 
   const WORKER_URL = "https://stock-api.senmao.workers.dev";
 
-  // 強制執行的開機過場動畫
+  // 強制至少停留 1.2 秒的開機動畫計時器
   window.addEventListener('load', () => {
     const fill = document.getElementById('loadingBarFill');
     const pctText = document.getElementById('loadingPct');
     const splash = document.getElementById('splash-screen');
 
     let currentPct = 0;
+    const startTime = Date.now();
+    const minDuration = 1200; // 至少停留 1.2 秒
+
     const interval = setInterval(() => {
-      currentPct += Math.floor(Math.random() * 15) + 8;
-      if (currentPct >= 100) {
-        currentPct = 100;
-        clearInterval(interval);
-        setTimeout(() => {
-          if(splash) splash.classList.add('fade-out');
-        }, 150);
-      }
+      currentPct += Math.floor(Math.random() * 8) + 4;
+      if (currentPct > 100) currentPct = 100;
+
       if(fill) fill.style.width = currentPct + '%';
       if(pctText) pctText.innerText = currentPct + '%';
-    }, 25);
+
+      if (currentPct === 100) {
+        clearInterval(interval);
+        const elapsed = Date.now() - startTime;
+        const remainingTime = Math.max(0, minDuration - elapsed);
+
+        setTimeout(() => {
+          if(splash) splash.classList.add('fade-out');
+        }, remainingTime);
+      }
+    }, 30);
   });
 
   function initChart() {
