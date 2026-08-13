@@ -35,11 +35,10 @@
 <div class="container">
   <h2 style="margin-bottom: 15px; color: #fff;">📊 SMC & 威科夫 智慧選股跑分儀</h2>
 
-  <!-- 控制面板 -->
   <div class="card control-panel">
     <div>
       <label>股票代碼：</label>
-      <input type="text" id="stockId" value="2330" placeholder="例如 2330">
+      <input type="text" id="stockId" value="5904" placeholder="例如 2330">
     </div>
     <div>
       <label>設定盈虧比 (R:R)：</label>
@@ -48,19 +47,20 @@
     <button onclick="analyzeStock()">開始跑分</button>
   </div>
 
-  <div id="loading" class="loading">⏳ 正在對接 FinMind 抓取還原 K 線、籌碼與新聞並進行指標繪圖...</div>
+  <div id="loading" class="loading">⏳ 正在對接 FinMind 抓取 K 線、籌碼與新聞並進行指標繪圖...</div>
 
-  <!-- 分析結果 -->
   <div class="card" id="resultCard" style="display:none;">
     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
       <div>
-        <h3 style="font-size: 20px;">評估結果：<span id="signalText"></span></h3>
+        <h3 style="font-size: 22px; color: #fff;">
+          <span id="stockTitle"></span>
+          <span style="font-size: 18px; margin-left: 10px;" id="signalText"></span>
+        </h3>
         <p style="font-size: 13px; color: #787b86; margin-top: 4px;">滿分 100 分，低於 50 分為偏空/高風險；高於 60 分具卡位價值</p>
       </div>
       <div id="scoreBadge" class="score-badge"></div>
     </div>
 
-    <!-- 交易規劃 -->
     <div class="plan-grid">
       <div class="plan-box"><div>建議位 (Close)</div><div id="pEntry" style="color:#2962ff;">-</div></div>
       <div class="plan-box"><div>建議止損位</div><div id="pStop" style="color:#f23645;">-</div></div>
@@ -68,21 +68,18 @@
       <div class="plan-box"><div>預設盈虧比</div><div id="pRR">-</div></div>
     </div>
 
-    <!-- 分析原因 -->
     <h4 style="margin-top: 15px; color: #fff;">💡 跑分邏輯與風控說明：</h4>
     <ul id="reasonsList" class="reasons-list"></ul>
   </div>
 
-  <!-- K 線圖表 -->
   <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: center;">
-      <h3 style="color: #fff;">📉 互動 K 線圖（已疊加斐波那契指標）</h3>
+      <h3 style="color: #fff;" id="chartTitle">📉 互動 K 線圖</h3>
       <span style="font-size: 12px; color: #787b86;">手機支援雙指手勢 / 電腦支援滾輪縮放</span>
     </div>
     <div id="chart-container"></div>
   </div>
 
-  <!-- 新聞清單 -->
   <div class="card" id="newsCard" style="display:none;">
     <h3 style="color: #fff; margin-bottom: 10px;">📰 最新相關新聞情報</h3>
     <div id="newsList"></div>
@@ -92,7 +89,7 @@
 <script>
   let chart = null;
   let candlestickSeries = null;
-  let priceLines = []; // 存放斐波那契畫線物件
+  let priceLines = [];
 
   const WORKER_URL = "https://stock-api.senmao.workers.dev";
 
@@ -123,7 +120,6 @@
     });
   }
 
-  // 清除舊有的斐波那契參考線
   function clearPriceLines() {
     if (candlestickSeries && priceLines.length > 0) {
       priceLines.forEach(line => candlestickSeries.removePriceLine(line));
@@ -131,7 +127,6 @@
     }
   }
 
-  // 在圖表畫上斐波那契線條
   function drawFibonacciLines(fib) {
     clearPriceLines();
     if (!fib) return;
@@ -178,26 +173,31 @@
 
       if (data.error) throw new Error(data.error);
 
-      // 1. 繪製 K 線並繪製斐波那契線
+      // 1. 繪製 K 線與黃金分割線
       if (candlestickSeries && data.kline && data.kline.length > 0) {
         candlestickSeries.setData(data.kline);
         chart.timeScale().fitContent();
         drawFibonacciLines(data.fibonacci_levels);
       }
 
-      // 2. 顯示跑分與卡位訊號
-      document.getElementById('signalText').innerText = data.signal;
+      // 2. 顯示股票代碼與中文名稱
+      const displayName = data.stock_name ? `${data.stock_id} ${data.stock_name}` : data.stock_id;
+      document.getElementById('stockTitle').innerText = displayName;
+      document.getElementById('chartTitle').innerText = `📉 ${displayName} K 線圖 (含斐波那契指標)`;
+
+      // 3. 跑分與訊號
+      document.getElementById('signalText').innerText = `[${data.signal}]`;
       const badge = document.getElementById('scoreBadge');
       badge.innerText = `${data.score} 分`;
       badge.className = `score-badge ${data.score >= 60 ? 'score-high' : data.score <= 45 ? 'score-low' : 'score-mid'}`;
 
-      // 3. 交易點位規劃
+      // 4. 交易點位
       document.getElementById('pEntry').innerText = `$${data.trade_plan.entry}`;
       document.getElementById('pStop').innerText = `$${data.trade_plan.stop_loss}`;
       document.getElementById('pTake').innerText = `$${data.trade_plan.take_profit}`;
       document.getElementById('pRR').innerText = `1 : ${data.trade_plan.rr_ratio}`;
 
-      // 4. 分析原因清單
+      // 5. 原因分析
       const reasonsList = document.getElementById('reasonsList');
       reasonsList.innerHTML = '';
       data.reasons.forEach(r => {
@@ -206,7 +206,7 @@
         reasonsList.appendChild(li);
       });
 
-      // 5. 渲染新聞清單
+      // 6. 新聞清單
       const newsListContainer = document.getElementById('newsList');
       newsListContainer.innerHTML = '';
       if (data.news && data.news.length > 0) {
