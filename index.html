@@ -40,6 +40,10 @@
     .toggle-group { display: flex; gap: 8px; align-items: center; }
     .toggle-btn { padding: 5px 10px; font-size: 12px; border-radius: 4px; border: 1px solid #363a45; background: #2a2e39; cursor: pointer; color: #888; }
     .toggle-btn.active { background: #2962ff; color: #fff; border-color: #2962ff; }
+
+    .quote-badge { font-size: 16px; font-weight: bold; padding: 4px 10px; border-radius: 6px; display: inline-block; margin-left: 10px; }
+    .quote-up { background: rgba(8, 153, 129, 0.2); color: #089981; border: 1px solid #089981; }
+    .quote-down { background: rgba(242, 54, 69, 0.2); color: #f23645; border: 1px solid #f23645; }
   </style>
 </head>
 <body>
@@ -59,24 +63,24 @@
       </div>
       <button onclick="analyzeStock()">開始量化跑分</button>
     </div>
-    <span style="font-size: 12px; color: #787b86;">SMC 訂單塊 (OB) + Wyckoff 箱體 + 操盤建議生成器</span>
+    <span style="font-size: 12px; color: #787b86;">SMC 訂單塊 (OB) + 威科夫箱體 + 今日報價實時追蹤</span>
   </div>
 
-  <div id="loading" class="loading">⏳ 正在計算 SMC 樞紐點、威科夫箱體與操盤建議...</div>
+  <div id="loading" class="loading">⏳ 正在計算 SMC 樞紐點、威科夫箱體與今日報價...</div>
 
   <div class="card" id="resultCard" style="display:none;">
     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
       <div>
-        <h3 style="font-size: 22px; color: #fff;">
+        <h3 style="font-size: 22px; color: #fff; display: flex; align-items: center; flex-wrap: wrap;">
           <span id="stockTitle"></span>
-          <span style="font-size: 18px; margin-left: 10px;" id="signalText"></span>
+          <span id="quoteInfo" class="quote-badge"></span>
+          <span style="font-size: 18px; margin-left: 15px;" id="signalText"></span>
         </h3>
-        <p style="font-size: 13px; color: #787b86; margin-top: 4px;">基準分 50 分 | 包含 SMC 機構訂單塊壓制警訊與點位規劃</p>
+        <p style="font-size: 13px; color: #787b86; margin-top: 4px;">基準分 50 分 | 包含機構訂單塊壓制警訊與點位規劃</p>
       </div>
       <div id="scoreBadge" class="score-badge"></div>
     </div>
 
-    <!-- 建議入場點位卡片 -->
     <div class="plan-grid">
       <div class="plan-box"><div>建議入場位</div><div id="pEntry" style="color:#2962ff;">-</div></div>
       <div class="plan-box"><div>建議硬止損位</div><div id="pStop" style="color:#f23645;">-</div></div>
@@ -84,7 +88,6 @@
       <div class="plan-box"><div>預計收益率</div><div id="pProfit" style="color:#e2a000;">-</div></div>
     </div>
 
-    <!-- 操盤實戰建議 -->
     <div style="margin-top: 15px; padding: 12px; background: #262b38; border-radius: 6px; border-left: 4px solid #2962ff;">
       <h4 style="color: #fff; margin-bottom: 6px;">💡 交易操盤具體策略建議：</h4>
       <p id="strategyAdvice" style="font-size: 14px; color: #d1d4dc; line-height: 1.6;"></p>
@@ -98,7 +101,6 @@
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
       <h3 style="color: #fff;" id="chartTitle">📉 互動 K 線圖</h3>
       
-      <!-- 圖示開關按鈕組 -->
       <div class="toggle-group">
         <span style="font-size: 12px; color: #787b86;">圖示開關：</span>
         <button id="btnToggleOB" class="toggle-btn active" onclick="toggleOverlay('OB')">SMC 訂單塊</button>
@@ -120,7 +122,6 @@
   let priceLines = [];
   let rawResponseData = null;
 
-  // 圖示顯示狀態
   let showOB = true;
   let showWyckoff = true;
   let showLines = true;
@@ -214,7 +215,6 @@
     });
   }
 
-  // 🔴 Canvas 背景半透明區塊渲染 (包含 SMC OB 與 威科夫箱體)
   function drawCanvasBoxes() {
     try {
       const canvas = document.getElementById('overlay-canvas');
@@ -231,7 +231,7 @@
 
       const timeScale = chart.timeScale();
 
-      // 1. 渲染威科夫 Wyckoff 吸籌/派發箱體
+      // 1. 威科夫箱體定錨在歷史底部的 Canvas 繪製
       if (showWyckoff && rawResponseData.wyckoff_box) {
         const box = rawResponseData.wyckoff_box;
         const y1 = candlestickSeries.priceToCoordinate(box.top);
@@ -243,11 +243,12 @@
             const coord = timeScale.timeToCoordinate(box.startTime);
             if (coord !== null && coord > 0) x1 = coord;
           }
-          const x2 = container.clientWidth;
+          // 箱體寬度延伸到畫面中間偏左（涵蓋打底期）
+          const x2 = timeScale.timeToCoordinate(rawResponseData.kline[Math.floor(rawResponseData.kline.length / 2)].time) || container.clientWidth / 2;
 
           const rectY = Math.min(y1, y2);
           const rectH = Math.abs(y2 - y1);
-          const rectW = Math.max(10, x2 - x1);
+          const rectW = Math.max(50, x2 - x1);
 
           ctx.fillStyle = box.color;
           ctx.fillRect(x1, rectY, rectW, rectH);
@@ -260,11 +261,11 @@
 
           ctx.fillStyle = box.borderColor;
           ctx.font = 'bold 12px sans-serif';
-          ctx.fillText(box.label, x1 + 15, rectY + 20);
+          ctx.fillText(box.label, x1 + 10, rectY + 20);
         }
       }
 
-      // 2. 渲染 SMC OB 訂單塊
+      // 2. SMC OB 訂單塊
       if (showOB && rawResponseData.smc_boxes) {
         rawResponseData.smc_boxes.forEach(box => {
           if (!box.top || !box.bottom) return;
@@ -335,9 +336,16 @@
         setTimeout(() => drawCanvasBoxes(), 150);
       }
 
-      // 清潔乾淨的標題
       const displayName = data.stock_name ? `${data.stock_id} ${data.stock_name}` : data.stock_id;
       document.getElementById('stockTitle').innerText = displayName;
+
+      // 渲染今日報價與漲跌 badge
+      const q = data.quote;
+      const quoteInfo = document.getElementById('quoteInfo');
+      const isUp = q.change >= 0;
+      quoteInfo.className = `quote-badge ${isUp ? 'quote-up' : 'quote-down'}`;
+      quoteInfo.innerText = `$${q.close} (${isUp ? '+' : ''}${q.change}, ${isUp ? '+' : ''}${q.change_pct}%)`;
+
       document.getElementById('chartTitle').innerText = `📉 ${displayName} K 線圖`;
 
       document.getElementById('signalText').innerText = `[${data.signal}]`;
