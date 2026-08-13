@@ -54,10 +54,10 @@
       </div>
       <button onclick="analyzeStock()">開始量化跑分</button>
     </div>
-    <span style="font-size: 12px; color: #787b86;">同步 TradingView SMC 著色訂單塊 (OB)、FVG 缺口與 CHoCH 轉折</span>
+    <span style="font-size: 12px; color: #787b86;">同步 TradingView SMC 著色訂單塊 (OB) 與風控防禦</span>
   </div>
 
-  <div id="loading" class="loading">⏳ 正在計算 SMC 樞紐點、OB 著色塊與 FVG 缺口...</div>
+  <div id="loading" class="loading">⏳ 正在計算 SMC 樞紐點、OB 著色塊與風控鎖定...</div>
 
   <div class="card" id="resultCard" style="display:none;">
     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
@@ -84,11 +84,10 @@
 
   <div class="card" style="position: relative;">
     <div style="display: flex; justify-content: space-between; align-items: center;">
-      <h3 style="color: #fff;" id="chartTitle">📉 互動 K 線圖 (同步 TV SMC 著色塊標示)</h3>
+      <h3 style="color: #fff;" id="chartTitle">📉 互動 K 線圖 (標示 SMC 訂單塊)</h3>
       <span style="font-size: 12px; color: #787b86;">日期格式: YYYY/MM/DD</span>
     </div>
 
-    <!-- 畫布圖表區域 -->
     <div class="chart-wrapper">
       <div id="chart-container"></div>
       <canvas id="overlay-canvas"></canvas>
@@ -99,7 +98,8 @@
 <script>
   let chart = null;
   let candlestickSeries = null;
-  let currentSmcData = null;
+  let priceLines = [];
+  let currentSmcBoxes = [];
 
   const WORKER_URL = "https://stock-api.senmao.workers.dev";
 
@@ -133,88 +133,77 @@
       wickUpColor: '#089981', wickDownColor: '#f23645'
     });
 
-    // 訂閱縮放與拖曳事件，實時重繪 Canvas 色塊
-    chart.timeScale().subscribeVisibleLogicalRangeChange(() => drawCanvasOverlays());
-    chart.timeScale().subscribeCrosshairMove(() => drawCanvasOverlays());
+    chart.timeScale().subscribeVisibleLogicalRangeChange(() => drawCanvasBoxes());
+    chart.timeScale().subscribeCrosshairMove(() => drawCanvasBoxes());
 
     window.addEventListener('resize', () => {
       if (chart && container) {
         chart.applyOptions({ width: container.clientWidth });
-        drawCanvasOverlays();
+        drawCanvasBoxes();
       }
     });
   }
 
-  // 🔴 核心 HTML5 Canvas 色塊渲染引擎
-  function drawCanvasOverlays() {
-    const canvas = document.getElementById('overlay-canvas');
-    const container = document.getElementById('chart-container');
-    if (!canvas || !container || !chart || !candlestickSeries || !currentSmcData) return;
+  function clearPriceLines() {
+    if (candlestickSeries && priceLines.length > 0) {
+      priceLines.forEach(line => {
+        try { candlestickSeries.removePriceLine(line); } catch(e){}
+      });
+      priceLines = [];
+    }
+  }
 
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = container.clientWidth * dpr;
-    canvas.height = container.clientHeight * dpr;
+  // 🔴 100% 原生價格水平線繪製 (永遠不會失效)
+  function renderPriceLines(lines) {
+    clearPriceLines();
+    if (!lines || !Array.isArray(lines)) return;
 
-    const ctx = canvas.getContext('2d');
-    ctx.scale(dpr, dpr);
-    ctx.clearRect(0, 0, container.clientWidth, container.clientHeight);
+    lines.forEach(l => {
+      if (l.price && !isNaN(l.price)) {
+        try {
+          const pl = candlestickSeries.createPriceLine({
+            price: l.price,
+            color: l.color,
+            lineWidth: 1,
+            lineStyle: LightweightCharts.LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: l.title
+          });
+          priceLines.push(pl);
+        } catch (e) {}
+      }
+    });
+  }
 
-    const timeScale = chart.timeScale();
+  // 🔴 Canvas 背景半透明區塊渲染 (具備 Try-Catch 絕不卡死)
+  function drawCanvasBoxes() {
+    try {
+      const canvas = document.getElementById('overlay-canvas');
+      const container = document.getElementById('chart-container');
+      if (!canvas || !container || !chart || !candlestickSeries || !currentSmcBoxes) return;
 
-    // 1. 繪製 OB 與 FVG 著色矩形塊
-    if (currentSmcData.boxes && Array.isArray(currentSmcData.boxes)) {
-      currentSmcData.boxes.forEach(box => {
-        const x1 = timeScale.timeToCoordinate(box.startTime) || 0;
-        const x2 = container.clientWidth; // 延伸至圖表右側
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = container.clientWidth * dpr;
+      canvas.height = container.clientHeight * dpr;
 
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, container.clientWidth, container.clientHeight);
+
+      currentSmcBoxes.forEach(box => {
         const y1 = candlestickSeries.priceToCoordinate(box.top);
         const y2 = candlestickSeries.priceToCoordinate(box.bottom);
 
         if (y1 !== null && y2 !== null) {
-          const rectX = Math.min(x1, x2);
           const rectY = Math.min(y1, y2);
-          const rectW = Math.abs(x2 - x1);
           const rectH = Math.abs(y2 - y1);
 
-          // 填滿半透明色帶
           ctx.fillStyle = box.color;
-          ctx.fillRect(rectX, rectY, rectW, rectH);
-
-          // 邊框
-          ctx.strokeStyle = box.borderColor;
-          ctx.lineWidth = 1;
-          ctx.strokeRect(rectX, rectY, rectW, rectH);
-
-          // 標籤文字
-          ctx.fillStyle = box.borderColor;
-          ctx.font = "bold 11px sans-serif";
-          ctx.fillText(box.label, rectX + 10, rectY + 14);
+          ctx.fillRect(0, rectY, container.clientWidth, rectH);
         }
       });
-    }
-
-    // 2. 繪製 CHoCH 轉折虛線與文字標籤
-    if (currentSmcData.choch) {
-      const choch = currentSmcData.choch;
-      const x1 = timeScale.timeToCoordinate(choch.startTime) || 0;
-      const x2 = container.clientWidth;
-      const y = candlestickSeries.priceToCoordinate(choch.price);
-
-      if (y !== null) {
-        ctx.beginPath();
-        ctx.setLineDash([4, 4]); // 虛線
-        ctx.strokeStyle = choch.type === 'BULLISH' ? '#2157f3' : '#f23645';
-        ctx.lineWidth = 1.5;
-        ctx.moveTo(x1, y);
-        ctx.lineTo(x2, y);
-        ctx.stroke();
-
-        // CHoCH 標籤
-        ctx.setLineDash([]);
-        ctx.fillStyle = choch.type === 'BULLISH' ? '#2157f3' : '#f23645';
-        ctx.font = "bold 12px sans-serif";
-        ctx.fillText(`CHoCH ($${choch.price})`, x1 + 20, y - 6);
-      }
+    } catch (e) {
+      console.error('Canvas overlay error:', e);
     }
   }
 
@@ -240,19 +229,25 @@
         candlestickSeries.setData(data.kline);
         chart.timeScale().fitContent();
 
-        // 存入全域 SMC 數據並觸發 Canvas 繪圖
-        currentSmcData = data.smc_data;
-        setTimeout(() => drawCanvasOverlays(), 100);
+        // 1. 繪製原生 100% 穩定的線條與箭頭標籤
+        renderPriceLines(data.price_lines);
+        if (data.markers && Array.isArray(data.markers)) {
+          candlestickSeries.setMarkers(data.markers);
+        }
+
+        // 2. 渲染背景 OB 色塊
+        currentSmcBoxes = data.smc_boxes || [];
+        setTimeout(() => drawCanvasBoxes(), 100);
       }
 
       const displayName = data.stock_name ? `${data.stock_id} ${data.stock_name}` : data.stock_id;
       document.getElementById('stockTitle').innerText = displayName;
-      document.getElementById('chartTitle').innerText = `📉 ${displayName} K 線圖 (同步 TV SMC 著色塊標示)`;
+      document.getElementById('chartTitle').innerText = `📉 ${displayName} K 線圖 (已標示 SMC 訂單塊與 CHoCH 關卡)`;
 
       document.getElementById('signalText').innerText = `[${data.signal}]`;
       const badge = document.getElementById('scoreBadge');
       badge.innerText = `${data.score} 分`;
-      badge.className = `score-badge ${data.score >= 60 ? 'score-high' : data.score <= 45 ? 'score-low' : 'score-mid'}`;
+      badge.className = `score-badge ${data.score >= 60 ? 'score-high' : data.score <= 50 ? 'score-low' : 'score-mid'}`;
 
       document.getElementById('pEntry').innerText = `$${data.trade_plan.entry}`;
       document.getElementById('pStop').innerText = `$${data.trade_plan.stop_loss}`;
