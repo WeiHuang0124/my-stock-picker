@@ -13,9 +13,11 @@
     .control-panel { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
     .inputs-group { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
     input, button, select { padding: 9px 12px; border-radius: 6px; border: 1px solid #363a45; background: #2a2e39; color: #fff; font-size: 14px; }
-    input { width: 100px; }
+    input { width: 90px; }
     button { background: #2962ff; border: none; cursor: pointer; font-weight: bold; color: #fff; }
     button:hover { background: #1e4bd8; }
+    .btn-log { background: #363a45; color: #d1d4dc; border: 1px solid #555; }
+    .btn-log:hover { background: #4e5361; }
     
     .chart-wrapper { position: relative; width: 100%; height: 480px; margin-top: 10px; }
     #chart-container { width: 100%; height: 100%; }
@@ -139,12 +141,20 @@
         <input type="text" id="stockId" value="2330" placeholder="例如 2330">
       </div>
       <div>
-        <label>盈虧比 (R:R)：</label>
+        <label>投資週期：</label>
+        <select id="timeframeSelect">
+          <option value="short">短線波段 (Swing)</option>
+          <option value="long">長線存股 (Long-term)</option>
+        </select>
+      </div>
+      <div>
+        <label>盈虧比：</label>
         <input type="number" id="rrRatio" value="3.0" step="0.5" min="1">
       </div>
       <button onclick="analyzeStock()">開始量化跑分</button>
+      <button class="btn-log" onclick="downloadLogs()">📥 下載運行 Log</button>
     </div>
-    <span style="font-size: 12px; color: #787b86;">TRADING HELPER：多空雙向操盤計畫 + 智慧風控引擎</span>
+    <span style="font-size: 12px; color: #787b86;">TRADING HELPER：內建即時記錄與 Log 匯出功能</span>
   </div>
 
   <div id="loading" class="loading">⏳ 正在同步技術面、基本面與最新新聞情報...</div>
@@ -157,7 +167,7 @@
           <span id="quoteInfo" class="quote-badge"></span>
           <span style="font-size: 18px; margin-left: 15px;" id="signalText"></span>
         </h3>
-        <p style="font-size: 13px; color: #787b86; margin-top: 4px;">TRADING HELPER 量化評分系統 | 支援做多與強烈做空 (Short) 操盤策略</p>
+        <p style="font-size: 13px; color: #787b86; margin-top: 4px;">TRADING HELPER 量化評分系統 | 智慧多空指引與殖利率校正</p>
       </div>
       <div id="scoreBadge" class="score-badge"></div>
     </div>
@@ -219,16 +229,38 @@
   let showLines = true;
 
   const WORKER_URL = "https://stock-api.senmao.workers.dev";
+  let appLogs = [];
+
+  function addLog(level, message, data = null) {
+    const timestamp = new Date().toISOString();
+    const logEntry = `[${timestamp}] [${level}] ${message} ${data ? JSON.stringify(data) : ''}`;
+    appLogs.push(logEntry);
+    console.log(logEntry);
+  }
+
+  function downloadLogs() {
+    addLog('INFO', '使用者點擊下載運行 Log');
+    const blob = new Blob([appLogs.join('\n')], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `trading_helper_log_${new Date().toISOString().slice(0,10)}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 
   // 強制至少停留 1.2 秒的開機動畫計時器
   window.addEventListener('load', () => {
+    addLog('INFO', '應用程式啟動，載入開機過場動畫');
     const fill = document.getElementById('loadingBarFill');
     const pctText = document.getElementById('loadingPct');
     const splash = document.getElementById('splash-screen');
 
     let currentPct = 0;
     const startTime = Date.now();
-    const minDuration = 1200; // 至少停留 1.2 秒
+    const minDuration = 1200;
 
     const interval = setInterval(() => {
       currentPct += Math.floor(Math.random() * 8) + 4;
@@ -244,6 +276,7 @@
 
         setTimeout(() => {
           if(splash) splash.classList.add('fade-out');
+          addLog('INFO', '開機動畫結束，進入主介面');
         }, remainingTime);
       }
     }, 30);
@@ -252,6 +285,7 @@
   function initChart() {
     const container = document.getElementById('chart-container');
     if (!container || chart) return;
+    addLog('INFO', '初始化圖表引擎');
 
     chart = LightweightCharts.createChart(container, {
       width: container.clientWidth,
@@ -294,12 +328,15 @@
     if (type === 'OB') {
       showOB = !showOB;
       document.getElementById('btnToggleOB').classList.toggle('active', showOB);
+      addLog('DEBUG', `切換圖層 SMC 訂單塊: ${showOB}`);
     } else if (type === 'WYCKOFF') {
       showWyckoff = !showWyckoff;
       document.getElementById('btnToggleWyckoff').classList.toggle('active', showWyckoff);
+      addLog('DEBUG', `切換圖層 威科夫箱體: ${showWyckoff}`);
     } else if (type === 'LINES') {
       showLines = !showLines;
       document.getElementById('btnToggleLines').classList.toggle('active', showLines);
+      addLog('DEBUG', `切換圖層 關卡水平線: ${showLines}`);
       if (showLines && rawResponseData) renderPriceLines(rawResponseData.price_lines);
       else clearPriceLines();
     }
@@ -418,18 +455,24 @@
       }
 
     } catch (e) {
-      console.error('Canvas overlay error:', e);
+      addLog('ERROR', 'Canvas 繪製圖層錯誤', e.toString());
     }
   }
 
   async function analyzeStock() {
     const stockId = document.getElementById('stockId').value.trim();
+    const timeframe = document.getElementById('timeframeSelect').value;
     const rr = document.getElementById('rrRatio').value;
     const loading = document.getElementById('loading');
     const resultCard = document.getElementById('resultCard');
     const newsCard = document.getElementById('newsCard');
 
-    if (!stockId) return alert('請輸入股票代碼');
+    addLog('INFO', `準備發起量化分析請求`, { stockId, timeframe, rr });
+
+    if (!stockId) {
+      addLog('WARN', '使用者未輸入股票代碼');
+      return alert('請輸入股票代碼');
+    }
     if (!chart || !candlestickSeries) initChart();
 
     loading.style.display = 'block';
@@ -437,13 +480,24 @@
     newsCard.style.display = 'none';
 
     try {
-      const res = await fetch(`${WORKER_URL}/?stock_id=${stockId}&rr=${rr}`);
+      const targetUrl = `${WORKER_URL}/?stock_id=${stockId}&timeframe=${timeframe}&rr=${rr}`;
+      addLog('INFO', `向 Worker 發送 Fetch 請求: ${targetUrl}`);
+
+      const res = await fetch(targetUrl);
+      addLog('INFO', `收到 Worker 回應狀態碼: ${res.status}`);
+
       const data = await res.json();
+      addLog('INFO', `成功解析 API 回應 JSON`, data);
+
       rawResponseData = data;
 
-      if (data.error) throw new Error(data.error);
+      if (data.error) {
+        addLog('ERROR', `API 回傳業務邏輯錯誤: ${data.error}`);
+        throw new Error(data.error);
+      }
 
       if (candlestickSeries && data.kline && data.kline.length > 0) {
+        addLog('INFO', `載入 K 線資料筆數: ${data.kline.length}`);
         candlestickSeries.setData(data.kline);
         chart.timeScale().fitContent();
 
@@ -454,6 +508,8 @@
         }
 
         setTimeout(() => drawCanvasBoxes(), 150);
+      } else {
+        addLog('WARN', 'K 線資料不足或格式不符');
       }
 
       const displayName = data.stock_name ? `${data.stock_id} ${data.stock_name}` : data.stock_id;
@@ -518,7 +574,9 @@
       }
 
       resultCard.style.display = 'block';
+      addLog('INFO', '個股分析渲染完畢');
     } catch (err) {
+      addLog('ERROR', `分析過程發生例外錯誤: ${err.message}`, err.stack);
       alert('分析失敗：' + err.message);
     } finally {
       loading.style.display = 'none';
@@ -526,6 +584,7 @@
   }
 
   window.onload = () => {
+    addLog('INFO', '網頁載入完成，初始化圖表並預設執行分析');
     initChart();
     analyzeStock();
   };
