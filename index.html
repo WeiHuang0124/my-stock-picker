@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>SMC & 威科夫 多時框與自動選股掃描系統</title>
+  <title>SMC & 威科夫 智慧選股與自動掃描儀</title>
   <script src="https://unpkg.com/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -37,7 +37,6 @@
     .news-date { color: #787b86; white-space: nowrap; font-size: 12px; }
     .loading { text-align: center; padding: 15px; color: #2962ff; font-size: 15px; display: none; }
     
-    /* 掃描結果表格 */
     .scan-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
     .scan-table th, .scan-table td { padding: 10px; text-align: left; border-bottom: 1px solid #2a2e39; }
     .scan-table th { color: #787b86; background: #1a1d26; }
@@ -50,7 +49,7 @@
 <div class="container">
   <h2 style="margin-bottom: 15px; color: #fff;">📊 SMC & 威科夫 智慧選股與自動掃描儀</h2>
 
-  <!-- 個股單獨查詢 -->
+  <!-- 個股查詢 -->
   <div class="card control-panel">
     <div class="inputs-group">
       <div>
@@ -77,7 +76,7 @@
         </select>
         <button class="btn-scan" onclick="startScanner()">一鍵自動掃描熱門台股</button>
       </div>
-      <span style="font-size: 12px; color: #787b86;">監控池涵蓋半導體、航運、金融與高股息指標股</span>
+      <span style="font-size: 12px; color: #787b86;">已加入請求延遲，防止 API 頻率過高導致算分失真</span>
     </div>
 
     <div id="scanProgress" class="loading"></div>
@@ -114,7 +113,6 @@
       <div id="scoreBadge" class="score-badge"></div>
     </div>
 
-    <!-- 交易規劃點位 -->
     <div class="plan-grid">
       <div class="plan-box"><div>建議位 (Close)</div><div id="pEntry" style="color:#2962ff;">-</div></div>
       <div class="plan-box"><div>建議止損位</div><div id="pStop" style="color:#f23645;">-</div></div>
@@ -122,7 +120,6 @@
       <div class="plan-box"><div>預設盈虧比</div><div id="pRR">-</div></div>
     </div>
 
-    <!-- 加減分與原因明細 -->
     <h4 style="margin-top: 18px; color: #fff;">⚖️ 加減分權重與分析依據明細：</h4>
     <div id="reasonsContainer" style="margin-top: 8px;"></div>
   </div>
@@ -151,7 +148,6 @@
 
   const WORKER_URL = "https://stock-api.senmao.workers.dev";
 
-  // 熱門監視股票池
   const WATCH_POOL = [
     '2330', '2317', '2454', '2308', '2382', '3231', '2603', '2609', 
     '2615', '2881', '2882', '2891', '5904', '1519', '1504', '3008', 
@@ -168,7 +164,6 @@
       layout: { backgroundColor: '#1e222d', textColor: '#d1d4dc' },
       grid: { vertLines: { color: '#2b2e3a' }, horzLines: { color: '#2b2e3a' } },
       timeScale: { pinchZoom: true, mouseWheel: true, timeVisible: true },
-      // 🔴 強制定義時間格式為 YYYY/MM/DD
       localization: {
         dateFormat: 'yyyy/MM/dd',
         timeFormatter: (timeStr) => {
@@ -248,31 +243,26 @@
 
       if (data.error) throw new Error(data.error);
 
-      // 1. K線與指標繪圖
       if (candlestickSeries && data.kline && data.kline.length > 0) {
         candlestickSeries.setData(data.kline);
         chart.timeScale().fitContent();
         drawFibonacciLines(data.fibonacci_levels);
       }
 
-      // 2. 抬頭資訊
       const displayName = data.stock_name ? `${data.stock_id} ${data.stock_name}` : data.stock_id;
       document.getElementById('stockTitle').innerText = displayName;
       document.getElementById('chartTitle').innerText = `📉 ${displayName} K 線圖`;
 
-      // 3. 跑分與標籤
       document.getElementById('signalText').innerText = `[${data.signal}]`;
       const badge = document.getElementById('scoreBadge');
       badge.innerText = `${data.score} 分`;
       badge.className = `score-badge ${data.score >= 60 ? 'score-high' : data.score <= 45 ? 'score-low' : 'score-mid'}`;
 
-      // 4. 點位
       document.getElementById('pEntry').innerText = `$${data.trade_plan.entry}`;
       document.getElementById('pStop').innerText = `$${data.trade_plan.stop_loss}`;
       document.getElementById('pTake').innerText = `$${data.trade_plan.take_profit}`;
       document.getElementById('pRR').innerText = `1 : ${data.trade_plan.rr_ratio}`;
 
-      // 5. 加減分明細渲染
       const reasonsContainer = document.getElementById('reasonsContainer');
       reasonsContainer.innerHTML = '';
       const breakdown = data.score_breakdown || [];
@@ -289,7 +279,6 @@
         });
       }
 
-      // 6. 新聞清單
       const newsListContainer = document.getElementById('newsList');
       newsListContainer.innerHTML = '';
       if (data.news && data.news.length > 0) {
@@ -311,7 +300,7 @@
     }
   }
 
-  // 🔴 自動掃描選股模組
+  // 🔴 防頻率封鎖掃描函數 (加入 300ms 請求間隔)
   async function startScanner() {
     const target = document.getElementById('scanTarget').value;
     const progress = document.getElementById('scanProgress');
@@ -327,7 +316,7 @@
 
     for (let i = 0; i < WATCH_POOL.length; i++) {
       const code = WATCH_POOL[i];
-      progress.innerText = `🔍 正在掃描台股指標池 (${i + 1}/${WATCH_POOL.length})：${code}...`;
+      progress.innerText = `🔍 正在精準分析台股指標池 (${i + 1}/${WATCH_POOL.length})：${code}...`;
 
       try {
         const res = await fetch(`${WORKER_URL}/?stock_id=${code}&rr=${rr}`);
@@ -339,13 +328,14 @@
           else if (target === 'BUY' && data.score >= 60) isMatch = true;
           else if (target === 'SELL' && data.score <= 40) isMatch = true;
 
-          if (isMatch) {
-            matchedStocks.push(data);
-          }
+          if (isMatch) matchedStocks.push(data);
         }
       } catch (e) {
         console.error(`掃描 ${code} 失敗:`, e);
       }
+
+      // 🛡️ 關鍵修復：每次請求間隔 300 毫秒，避免觸發 FinMind API 限流
+      await new Promise(resolve => setTimeout(resolve, 300));
     }
 
     progress.style.display = 'none';
