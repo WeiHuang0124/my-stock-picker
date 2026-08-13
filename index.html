@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>自用 SMC & 威科夫 選股跑分系統</title>
-  <!-- 引入 TradingView Lightweight Charts -->
-  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+  <!-- 鎖定 lightweight-charts 3.8.0 穩定版本 -->
+  <script src="https://unpkg.com/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #131722; color: #d1d4dc; padding: 15px; }
@@ -77,38 +77,35 @@
 </div>
 
 <script>
-  let chart, candlestickSeries;
+  let chart = null;
+  let candlestickSeries = null;
 
-  // 初始化 TradingView 圖表 (兼容舊版與 v4.x 新版 API)
   function initChart() {
     const container = document.getElementById('chart-container');
+    if (!container || chart) return;
+
     chart = LightweightCharts.createChart(container, {
       width: container.clientWidth,
       height: 420,
       layout: { backgroundColor: '#1e222d', textColor: '#d1d4dc' },
       grid: { vertLines: { color: '#2b2e3a' }, horzLines: { color: '#2b2e3a' } },
       timeScale: {
-        pinchZoom: true,       // 支援手機雙指手勢縮放
-        mouseWheel: true,      // 支援電腦滾輪縮放
+        pinchZoom: true,
+        mouseWheel: true,
         timeVisible: true
       }
     });
 
-    // 兼容處理：自動判斷 Lightweight Charts API 版本
-    const seriesOptions = {
+    candlestickSeries = chart.addCandlestickSeries({
       upColor: '#089981', downColor: '#f23645',
       borderUpColor: '#089981', borderDownColor: '#f23645',
       wickUpColor: '#089981', wickDownColor: '#f23645'
-    };
-
-    if (chart.addCandlestickSeries) {
-      candlestickSeries = chart.addCandlestickSeries(seriesOptions);
-    } else if (LightweightCharts.CandlestickSeries) {
-      candlestickSeries = chart.addSeries(LightweightCharts.CandlestickSeries, seriesOptions);
-    }
+    });
 
     window.addEventListener('resize', () => {
-      chart.applyOptions({ width: container.clientWidth });
+      if (chart && container) {
+        chart.applyOptions({ width: container.clientWidth });
+      }
     });
   }
 
@@ -120,11 +117,16 @@
 
     if (!stockId) return alert('請輸入股票代碼');
 
+    // 防護機制：如果圖表尚未初始化，強制初始化
+    if (!chart || !candlestickSeries) {
+      initChart();
+    }
+
     loading.style.display = 'block';
     resultCard.style.display = 'none';
 
     // ⚠️ 請確認這裡有替換成你的 Cloudflare Worker 網址
-    const WORKER_URL = "https://my-stock-worker.xxx.workers.dev](https://my-stock-worker.xxx.workers.dev"; 
+    const WORKER_URL = "https://stock-api.senmao.workers.dev/"; 
 
     try {
       const res = await fetch(`${WORKER_URL}/?stock_id=${stockId}&rr=${rr}`);
@@ -167,7 +169,6 @@
     }
   }
 
-  // 頁面載入完成後初始化圖表
   window.onload = () => {
     initChart();
   };
