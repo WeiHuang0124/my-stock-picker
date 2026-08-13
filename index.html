@@ -49,12 +49,11 @@
 <div class="container">
   <h2 style="margin-bottom: 15px; color: #fff;">📊 SMC & 威科夫 智慧選股與自動掃描儀</h2>
 
-  <!-- 個股查詢 -->
   <div class="card control-panel">
     <div class="inputs-group">
       <div>
         <label>股票代碼：</label>
-        <input type="text" id="stockId" value="2330" placeholder="例如 2330">
+        <input type="text" id="stockId" value="2615" placeholder="例如 2615">
       </div>
       <div>
         <label>盈虧比 (R:R)：</label>
@@ -64,7 +63,6 @@
     </div>
   </div>
 
-  <!-- 自動選股掃描區塊 -->
   <div class="card">
     <div class="control-panel">
       <div class="inputs-group">
@@ -76,7 +74,7 @@
         </select>
         <button class="btn-scan" onclick="startScanner()">一鍵自動掃描熱門台股</button>
       </div>
-      <span style="font-size: 12px; color: #787b86;">已加入請求延遲，防止 API 頻率過高導致算分失真</span>
+      <span style="font-size: 12px; color: #787b86;">已整合 LuxAlgo SMC 與 Wyckoff 結構指標</span>
     </div>
 
     <div id="scanProgress" class="loading"></div>
@@ -98,9 +96,8 @@
     </div>
   </div>
 
-  <div id="loading" class="loading">⏳ 正在抓取多時框數據、進行 K 線型態辨識與繪製斐波那契指標...</div>
+  <div id="loading" class="loading">⏳ 正在計算 SMC 機構訂單塊 (Order Block) 與黃金分割區間...</div>
 
-  <!-- 個股分析卡片 -->
   <div class="card" id="resultCard" style="display:none;">
     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
       <div>
@@ -108,7 +105,7 @@
           <span id="stockTitle"></span>
           <span style="font-size: 18px; margin-left: 10px;" id="signalText"></span>
         </h3>
-        <p style="font-size: 13px; color: #787b86; margin-top: 4px;">基準分 50 分 | 包含 K 線型態、SMC 缺口、威科夫 Spring 與三大法人加扣分明細</p>
+        <p style="font-size: 13px; color: #787b86; margin-top: 4px;">基準分 50 分 | 包含 K 線型態、LuxAlgo SMC 訂單塊、CHoCH 轉折與籌碼明細</p>
       </div>
       <div id="scoreBadge" class="score-badge"></div>
     </div>
@@ -124,17 +121,15 @@
     <div id="reasonsContainer" style="margin-top: 8px;"></div>
   </div>
 
-  <!-- K 線圖表 -->
   <div class="card" style="position: relative;">
     <div style="display: flex; justify-content: space-between; align-items: center;">
-      <h3 style="color: #fff;" id="chartTitle">📉 互動 K 線圖</h3>
+      <h3 style="color: #fff;" id="chartTitle">📉 互動 K 線圖 (同步 TradingView LuxAlgo 標示)</h3>
       <span style="font-size: 12px; color: #787b86;">日期格式: YYYY/MM/DD | 手機雙指縮放</span>
     </div>
 
     <div id="chart-container"></div>
   </div>
 
-  <!-- 新聞情報 -->
   <div class="card" id="newsCard" style="display:none;">
     <h3 style="color: #fff; margin-bottom: 10px;">📰 最新個股新聞情報</h3>
     <div id="newsList"></div>
@@ -201,12 +196,21 @@
     if (!fib) return;
 
     const lines = [
-      { price: fib.swing_high, color: '#f23645', title: '高點 (Swing High / BOS)' },
-      { price: fib.fib_0382, color: '#e2a000', title: '斐波 0.382' },
-      { price: fib.fib_0500, color: '#2962ff', title: '斐波 0.500 (等價位)' },
-      { price: fib.fib_0618, color: '#089981', title: '斐波 0.618 (折扣進場區)' },
-      { price: fib.swing_low, color: '#089981', title: '低點 (Swing Low / 止損線)' }
+      { price: fib.swing_high, color: '#f23645', title: 'Weak High ($' + fib.swing_high + ')' },
+      { price: fib.fib_0382, color: '#e2a000', title: 'Fib 0.382' },
+      { price: fib.fib_0500, color: '#2962ff', title: 'Fib 0.500 (等價位)' },
+      { price: fib.fib_0618, color: '#089981', title: 'Fib 0.618 (折扣進場區)' },
+      { price: fib.swing_low, color: '#089981', title: 'Strong Low ($' + fib.swing_low + ')' }
     ];
+
+    if (fib.choch_level) {
+      lines.push({ price: fib.choch_level, color: '#2962ff', title: 'CHoCH 轉折點 ($' + fib.choch_level + ')' });
+    }
+
+    if (fib.order_block) {
+      lines.push({ price: fib.order_block.top, color: '#1848cc', title: 'Bullish OB 上軌 ($' + fib.order_block.top + ')' });
+      lines.push({ price: fib.order_block.bottom, color: '#1848cc', title: 'Bullish OB 下軌 ($' + fib.order_block.bottom + ')' });
+    }
 
     lines.forEach(l => {
       const pl = candlestickSeries.createPriceLine({
@@ -251,7 +255,7 @@
 
       const displayName = data.stock_name ? `${data.stock_id} ${data.stock_name}` : data.stock_id;
       document.getElementById('stockTitle').innerText = displayName;
-      document.getElementById('chartTitle').innerText = `📉 ${displayName} K 線圖`;
+      document.getElementById('chartTitle').innerText = `📉 ${displayName} K 線圖 (已同步 LuxAlgo 結構標示)`;
 
       document.getElementById('signalText').innerText = `[${data.signal}]`;
       const badge = document.getElementById('scoreBadge');
@@ -300,7 +304,6 @@
     }
   }
 
-  // 🔴 防頻率封鎖掃描函數 (加入 300ms 請求間隔)
   async function startScanner() {
     const target = document.getElementById('scanTarget').value;
     const progress = document.getElementById('scanProgress');
@@ -334,7 +337,6 @@
         console.error(`掃描 ${code} 失敗:`, e);
       }
 
-      // 🛡️ 關鍵修復：每次請求間隔 300 毫秒，避免觸發 FinMind API 限流
       await new Promise(resolve => setTimeout(resolve, 300));
     }
 
