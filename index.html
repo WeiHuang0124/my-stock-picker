@@ -294,6 +294,14 @@
       layout: { backgroundColor: '#1e222d', textColor: '#d1d4dc' },
       grid: { vertLines: { color: '#2b2e3a' }, horzLines: { color: '#2b2e3a' } },
       timeScale: { pinchZoom: true, mouseWheel: true, timeVisible: true },
+      // 🚀 關鍵修復：啟用 Y 軸動態自動縮放，並設定上下留白邊距以徹底消除下方 0.00 死區
+      rightPriceScale: {
+        autoScale: true,
+        scaleMargins: {
+          top: 0.15,
+          bottom: 0.15,
+        },
+      },
       localization: {
         dateFormat: 'yyyy/MM/dd',
         timeFormatter: (timeStr) => {
