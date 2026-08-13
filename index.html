@@ -61,7 +61,7 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      z-index: 9999;
+      z-index: 99999;
       transition: opacity 0.6s ease, visibility 0.6s ease;
     }
     #splash-screen.fade-out {
@@ -144,7 +144,7 @@
       </div>
       <button onclick="analyzeStock()">開始量化跑分</button>
     </div>
-    <span style="font-size: 12px; color: #787b86;">全盤通用模型：動態多空收益率 + 谷歌搜尋新聞超連結</span>
+    <span style="font-size: 12px; color: #787b86;">全盤通用模型：多空雙向操盤計畫 + 開機過場動畫</span>
   </div>
 
   <div id="loading" class="loading">⏳ 正在同步技術面、基本面與最新新聞情報...</div>
@@ -157,7 +157,7 @@
           <span id="quoteInfo" class="quote-badge"></span>
           <span style="font-size: 18px; margin-left: 15px;" id="signalText"></span>
         </h3>
-        <p style="font-size: 13px; color: #787b86; margin-top: 4px;">全盤通用量化評分系統 | 動態多空目標指引與新聞輿論</p>
+        <p style="font-size: 13px; color: #787b86; margin-top: 4px;">全盤通用量化評分系統 | 支援做多與強烈做空 (Short) 操盤策略</p>
       </div>
       <div id="scoreBadge" class="score-badge"></div>
     </div>
@@ -220,25 +220,25 @@
 
   const WORKER_URL = "https://stock-api.senmao.workers.dev";
 
-  // 炫酷開機進度動畫模擬
-  window.addEventListener('DOMContentLoaded', () => {
+  // 強制執行的開機過場動畫
+  window.addEventListener('load', () => {
     const fill = document.getElementById('loadingBarFill');
     const pctText = document.getElementById('loadingPct');
     const splash = document.getElementById('splash-screen');
 
     let currentPct = 0;
     const interval = setInterval(() => {
-      currentPct += Math.floor(Math.random() * 12) + 6;
+      currentPct += Math.floor(Math.random() * 15) + 8;
       if (currentPct >= 100) {
         currentPct = 100;
         clearInterval(interval);
         setTimeout(() => {
-          splash.classList.add('fade-out');
-        }, 200);
+          if(splash) splash.classList.add('fade-out');
+        }, 150);
       }
       if(fill) fill.style.width = currentPct + '%';
       if(pctText) pctText.innerText = currentPct + '%';
-    }, 30);
+    }, 25);
   });
 
   function initChart() {
@@ -476,7 +476,7 @@
       const profitElem = document.getElementById('pProfit');
       const profitVal = data.trade_plan.profit_pct;
       profitElem.innerText = `${profitVal > 0 ? '+' : ''}${profitVal}%`;
-      profitElem.style.color = profitVal >= 0 ? '#089981' : '#f23645';
+      profitElem.style.color = '#089981';
 
       document.getElementById('strategyAdvice').innerText = data.strategy_advice || '無具體操盤建議。';
 
