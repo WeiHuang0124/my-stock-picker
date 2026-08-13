@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>SMC & 威科夫 多時框選股跑分系統</title>
+  <title>SMC & 威科夫 多時框與自動選股掃描系統</title>
   <script src="https://unpkg.com/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #131722; color: #d1d4dc; padding: 15px; }
-    .container { max-width: 1080px; margin: 0 auto; }
+    .container { max-width: 1100px; margin: 0 auto; }
     .card { background: #1e222d; border-radius: 8px; padding: 15px; margin-bottom: 15px; border: 1px solid #2a2e39; }
     .control-panel { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
     .inputs-group { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
@@ -16,8 +16,8 @@
     input { width: 100px; }
     button { background: #2962ff; border: none; cursor: pointer; font-weight: bold; }
     button:hover { background: #1e4bd8; }
-    .tf-btn { background: #363a45; color: #b2b5be; border: none; cursor: pointer; }
-    .tf-btn.active { background: #2962ff; color: #fff; }
+    .btn-scan { background: #089981; }
+    .btn-scan:hover { background: #067260; }
     #chart-container { height: 480px; width: 100%; position: relative; margin-top: 10px; }
     .score-badge { padding: 8px 16px; border-radius: 20px; font-weight: bold; font-size: 20px; }
     .score-high { background: #089981; color: #fff; }
@@ -28,7 +28,6 @@
     .plan-box div:first-child { font-size: 12px; color: #787b86; margin-bottom: 4px; }
     .plan-box div:last-child { font-size: 16px; font-weight: bold; }
     
-    /* 加扣分標籤樣式 */
     .delta-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; margin-right: 8px; }
     .tag-plus { background: rgba(8, 153, 129, 0.2); color: #089981; border: 1px solid #089981; }
     .tag-minus { background: rgba(242, 54, 69, 0.2); color: #f23645; border: 1px solid #f23645; }
@@ -36,16 +35,22 @@
 
     .news-item { padding: 8px 0; border-bottom: 1px solid #2a2e39; font-size: 14px; display: flex; justify-content: space-between; gap: 10px; }
     .news-date { color: #787b86; white-space: nowrap; font-size: 12px; }
-    .loading { text-align: center; padding: 20px; color: #2962ff; font-size: 16px; display: none; }
-    .chart-info-overlay { position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(30, 34, 45, 0.85); padding: 8px 12px; border-radius: 6px; font-size: 12px; border: 1px solid #363a45; pointer-events: none; }
+    .loading { text-align: center; padding: 15px; color: #2962ff; font-size: 15px; display: none; }
+    
+    /* 掃描結果表格 */
+    .scan-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+    .scan-table th, .scan-table td { padding: 10px; text-align: left; border-bottom: 1px solid #2a2e39; }
+    .scan-table th { color: #787b86; background: #1a1d26; }
+    .scan-row { cursor: pointer; transition: background 0.2s; }
+    .scan-row:hover { background: #2a2e39; }
   </style>
 </head>
 <body>
 
 <div class="container">
-  <h2 style="margin-bottom: 15px; color: #fff;">📊 SMC & 威科夫 多時框智慧選股跑分儀</h2>
+  <h2 style="margin-bottom: 15px; color: #fff;">📊 SMC & 威科夫 智慧選股與自動掃描儀</h2>
 
-  <!-- 控制面板與時框選擇 -->
+  <!-- 個股單獨查詢 -->
   <div class="card control-panel">
     <div class="inputs-group">
       <div>
@@ -56,20 +61,47 @@
         <label>盈虧比 (R:R)：</label>
         <input type="number" id="rrRatio" value="3.0" step="0.5" min="1">
       </div>
-      <button onclick="analyzeStock()">開始跑分</button>
+      <button onclick="analyzeStock()">個股跑分</button>
+    </div>
+  </div>
+
+  <!-- 自動選股掃描區塊 -->
+  <div class="card">
+    <div class="control-panel">
+      <div class="inputs-group">
+        <label>🔍 篩選推薦目標：</label>
+        <select id="scanTarget">
+          <option value="STRONG_BUY">強力買進 (≥75分)</option>
+          <option value="BUY">偏多卡位 (≥60分)</option>
+          <option value="SELL">強烈做空/避險 (≤40分)</option>
+        </select>
+        <button class="btn-scan" onclick="startScanner()">一鍵自動掃描熱門台股</button>
+      </div>
+      <span style="font-size: 12px; color: #787b86;">監控池涵蓋半導體、航運、金融與高股息指標股</span>
     </div>
 
-    <!-- 多時框按鈕切換 -->
-    <div class="inputs-group">
-      <span style="font-size: 13px; color: #787b86;">分析週期：</span>
-      <button class="tf-btn active" id="tf-Day" onclick="changeTF('Day')">日線 (D)</button>
-      <button class="tf-btn" id="tf-60m" onclick="changeTF('60m')">4小時/1小時</button>
+    <div id="scanProgress" class="loading"></div>
+
+    <div id="scanResultContainer" style="display:none; margin-top: 12px;">
+      <h4 style="color:#fff;">🎯 符合篩選條件標的：</h4>
+      <table class="scan-table">
+        <thead>
+          <tr>
+            <th>股票代碼與名稱</th>
+            <th>評估得分</th>
+            <th>當前股價</th>
+            <th>推薦訊號</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="scanTableBody"></tbody>
+      </table>
     </div>
   </div>
 
   <div id="loading" class="loading">⏳ 正在抓取多時框數據、進行 K 線型態辨識與繪製斐波那契指標...</div>
 
-  <!-- 分析結果 -->
+  <!-- 個股分析卡片 -->
   <div class="card" id="resultCard" style="display:none;">
     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
       <div>
@@ -99,12 +131,7 @@
   <div class="card" style="position: relative;">
     <div style="display: flex; justify-content: space-between; align-items: center;">
       <h3 style="color: #fff;" id="chartTitle">📉 互動 K 線圖</h3>
-      <span style="font-size: 12px; color: #787b86;">手機支援雙指縮放 / 電腦支援滾輪縮放</span>
-    </div>
-    
-    <!-- 圖表疊加中文技術說明 -->
-    <div class="chart-info-overlay" id="chartOverlay">
-      📌 <b>技術說明：</b>紅色虛線為波段高點(BOS)，綠色虛線為波段低點/折扣區(Discount Zone)。
+      <span style="font-size: 12px; color: #787b86;">日期格式: YYYY/MM/DD | 手機雙指縮放</span>
     </div>
 
     <div id="chart-container"></div>
@@ -121,16 +148,15 @@
   let chart = null;
   let candlestickSeries = null;
   let priceLines = [];
-  let currentTF = 'Day';
 
   const WORKER_URL = "https://stock-api.senmao.workers.dev";
 
-  function changeTF(tf) {
-    currentTF = tf;
-    document.querySelectorAll('.tf-btn').forEach(btn => btn.classList.remove('active'));
-    document.getElementById(`tf-${tf}`).classList.add('active');
-    analyzeStock();
-  }
+  // 熱門監視股票池
+  const WATCH_POOL = [
+    '2330', '2317', '2454', '2308', '2382', '3231', '2603', '2609', 
+    '2615', '2881', '2882', '2891', '5904', '1519', '1504', '3008', 
+    '3661', '2379', '2408', '2357'
+  ];
 
   function initChart() {
     const container = document.getElementById('chart-container');
@@ -141,7 +167,20 @@
       height: 480,
       layout: { backgroundColor: '#1e222d', textColor: '#d1d4dc' },
       grid: { vertLines: { color: '#2b2e3a' }, horzLines: { color: '#2b2e3a' } },
-      timeScale: { pinchZoom: true, mouseWheel: true, timeVisible: true }
+      timeScale: { pinchZoom: true, mouseWheel: true, timeVisible: true },
+      // 🔴 強制定義時間格式為 YYYY/MM/DD
+      localization: {
+        dateFormat: 'yyyy/MM/dd',
+        timeFormatter: (timeStr) => {
+          if (typeof timeStr === 'string') return timeStr.replace(/-/g, '/');
+          if (typeof timeStr === 'object' && timeStr.year) {
+            const m = String(timeStr.month).padStart(2, '0');
+            const d = String(timeStr.day).padStart(2, '0');
+            return `${timeStr.year}/${m}/${d}`;
+          }
+          return timeStr;
+        }
+      }
     });
 
     candlestickSeries = chart.addCandlestickSeries({
@@ -187,12 +226,14 @@
     });
   }
 
-  async function analyzeStock() {
-    const stockId = document.getElementById('stockId').value.trim();
+  async function analyzeStock(targetStockId) {
+    const stockId = targetStockId || document.getElementById('stockId').value.trim();
     const rr = document.getElementById('rrRatio').value;
     const loading = document.getElementById('loading');
     const resultCard = document.getElementById('resultCard');
     const newsCard = document.getElementById('newsCard');
+
+    if (targetStockId) document.getElementById('stockId').value = targetStockId;
 
     if (!stockId) return alert('請輸入股票代碼');
     if (!chart || !candlestickSeries) initChart();
@@ -202,7 +243,7 @@
     newsCard.style.display = 'none';
 
     try {
-      const res = await fetch(`${WORKER_URL}/?stock_id=${stockId}&rr=${rr}&timeframe=${currentTF}`);
+      const res = await fetch(`${WORKER_URL}/?stock_id=${stockId}&rr=${rr}`);
       const data = await res.json();
 
       if (data.error) throw new Error(data.error);
@@ -216,9 +257,8 @@
 
       // 2. 抬頭資訊
       const displayName = data.stock_name ? `${data.stock_id} ${data.stock_name}` : data.stock_id;
-      const tfText = currentTF === 'Day' ? '日線' : '小時線';
-      document.getElementById('stockTitle').innerText = `${displayName} (${tfText})`;
-      document.getElementById('chartTitle').innerText = `📉 ${displayName} [${tfText}] K 線圖`;
+      document.getElementById('stockTitle').innerText = displayName;
+      document.getElementById('chartTitle').innerText = `📉 ${displayName} K 線圖`;
 
       // 3. 跑分與標籤
       document.getElementById('signalText').innerText = `[${data.signal}]`;
@@ -235,8 +275,9 @@
       // 5. 加減分明細渲染
       const reasonsContainer = document.getElementById('reasonsContainer');
       reasonsContainer.innerHTML = '';
-      if (data.score_breakdown && data.score_breakdown.length > 0) {
-        data.score_breakdown.forEach(item => {
+      const breakdown = data.score_breakdown || [];
+      if (breakdown.length > 0) {
+        breakdown.forEach(item => {
           const div = document.createElement('div');
           div.className = 'reason-item';
           const isPlus = item.type === 'PLUS';
@@ -262,11 +303,72 @@
       }
 
       resultCard.style.display = 'block';
+      resultCard.scrollIntoView({ behavior: 'smooth' });
     } catch (err) {
       alert('分析失敗：' + err.message);
     } finally {
       loading.style.display = 'none';
     }
+  }
+
+  // 🔴 自動掃描選股模組
+  async function startScanner() {
+    const target = document.getElementById('scanTarget').value;
+    const progress = document.getElementById('scanProgress');
+    const container = document.getElementById('scanResultContainer');
+    const tableBody = document.getElementById('scanTableBody');
+    const rr = document.getElementById('rrRatio').value;
+
+    progress.style.display = 'block';
+    container.style.display = 'none';
+    tableBody.innerHTML = '';
+
+    let matchedStocks = [];
+
+    for (let i = 0; i < WATCH_POOL.length; i++) {
+      const code = WATCH_POOL[i];
+      progress.innerText = `🔍 正在掃描台股指標池 (${i + 1}/${WATCH_POOL.length})：${code}...`;
+
+      try {
+        const res = await fetch(`${WORKER_URL}/?stock_id=${code}&rr=${rr}`);
+        const data = await res.json();
+
+        if (data && !data.error) {
+          let isMatch = false;
+          if (target === 'STRONG_BUY' && data.score >= 75) isMatch = true;
+          else if (target === 'BUY' && data.score >= 60) isMatch = true;
+          else if (target === 'SELL' && data.score <= 40) isMatch = true;
+
+          if (isMatch) {
+            matchedStocks.push(data);
+          }
+        }
+      } catch (e) {
+        console.error(`掃描 ${code} 失敗:`, e);
+      }
+    }
+
+    progress.style.display = 'none';
+    container.style.display = 'block';
+
+    if (matchedStocks.length === 0) {
+      tableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#787b86;">目前市場無符合「${document.getElementById('scanTarget').selectedOptions[0].text}」條件之標的。</td></tr>`;
+      return;
+    }
+
+    matchedStocks.forEach(st => {
+      const tr = document.createElement('tr');
+      tr.className = 'scan-row';
+      const nameText = st.stock_name ? `${st.stock_id} ${st.stock_name}` : st.stock_id;
+      tr.innerHTML = `
+        <td><b>${nameText}</b></td>
+        <td><b style="color:${st.score >= 60 ? '#089981' : st.score <= 40 ? '#f23645' : '#e2a000'}">${st.score} 分</b></td>
+        <td>$${st.trade_plan.entry}</td>
+        <td>${st.signal}</td>
+        <td><button onclick="analyzeStock('${st.stock_id}')" style="padding:4px 8px; font-size:12px;">載入分析</button></td>
+      `;
+      tableBody.appendChild(tr);
+    });
   }
 
   window.onload = () => {
