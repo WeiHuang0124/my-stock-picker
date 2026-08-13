@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>SMC & 威科夫 多維度量化個股分析儀</title>
+  <title>TRADING HELPER - 多維度量化個股分析儀</title>
   <script src="https://unpkg.com/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -70,7 +70,7 @@
     }
     .splash-content {
       text-align: center;
-      width: 340px;
+      width: 360px;
     }
     .splash-logo {
       font-size: 24px;
@@ -115,10 +115,10 @@
 </head>
 <body>
 
-<!-- 炫酷開機過場畫面 HTML (在此處可自行更改自訂名稱) -->
+<!-- 炫酷開機過場畫面 HTML -->
 <div id="splash-screen">
   <div class="splash-content">
-    <div class="splash-logo">TRADING<span>HELPER</span></div>
+    <div class="splash-logo">TRADING <span>HELPER</span></div>
     <div class="loading-bar-track">
       <div id="loadingBarFill" class="loading-bar-fill"></div>
     </div>
@@ -130,7 +130,7 @@
 </div>
 
 <div class="container">
-  <h2 style="margin-bottom: 15px; color: #fff;">📊 SMC & 威科夫 多維度量化個股分析儀</h2>
+  <h2 style="margin-bottom: 15px; color: #fff;">📊 TRADING HELPER | 多維度量化個股分析儀</h2>
 
   <div class="card control-panel">
     <div class="inputs-group">
@@ -144,7 +144,7 @@
       </div>
       <button onclick="analyzeStock()">開始量化跑分</button>
     </div>
-    <span style="font-size: 12px; color: #787b86;">全盤通用模型：多空雙向操盤計畫 + 開機過場動畫</span>
+    <span style="font-size: 12px; color: #787b86;">TRADING HELPER：多空雙向操盤計畫 + 智慧風控引擎</span>
   </div>
 
   <div id="loading" class="loading">⏳ 正在同步技術面、基本面與最新新聞情報...</div>
@@ -157,7 +157,7 @@
           <span id="quoteInfo" class="quote-badge"></span>
           <span style="font-size: 18px; margin-left: 15px;" id="signalText"></span>
         </h3>
-        <p style="font-size: 13px; color: #787b86; margin-top: 4px;">全盤通用量化評分系統 | 支援做多與強烈做空 (Short) 操盤策略</p>
+        <p style="font-size: 13px; color: #787b86; margin-top: 4px;">TRADING HELPER 量化評分系統 | 支援做多與強烈做空 (Short) 操盤策略</p>
       </div>
       <div id="scoreBadge" class="score-badge"></div>
     </div>
@@ -176,11 +176,11 @@
     </div>
 
     <div style="margin-top: 15px; padding: 12px; background: #262b38; border-radius: 6px; border-left: 4px solid #2962ff;">
-      <h4 style="color: #fff; margin-bottom: 6px;">💡 交易操盤具體策略建議：</h4>
+      <h4 style="color: #fff; margin-bottom: 6px;">💡 TRADING HELPER 操盤具體策略建議：</h4>
       <p id="strategyAdvice" style="font-size: 14px; color: #d1d4dc; line-height: 1.6;"></p>
     </div>
 
-    <h4 style="margin-top: 18px; color: #fff;">⚖️ 通用量化評分依據明細：</h4>
+    <h4 style="margin-top: 18px; color: #fff;">⚖️ TRADING HELPER 量化評分依據明細：</h4>
     <div id="reasonsContainer" style="margin-top: 8px;"></div>
   </div>
 
