@@ -12,9 +12,9 @@
     .card { background: #1e222d; border-radius: 8px; padding: 15px; margin-bottom: 15px; border: 1px solid #2a2e39; }
     .control-panel { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
     .inputs-group { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-    input, button { padding: 9px 12px; border-radius: 6px; border: 1px solid #363a45; background: #2a2e39; color: #fff; font-size: 14px; }
+    input, button, select { padding: 9px 12px; border-radius: 6px; border: 1px solid #363a45; background: #2a2e39; color: #fff; font-size: 14px; }
     input { width: 100px; }
-    button { background: #2962ff; border: none; cursor: pointer; font-weight: bold; }
+    button { background: #2962ff; border: none; cursor: pointer; font-weight: bold; color: #fff; }
     button:hover { background: #1e4bd8; }
     
     .chart-wrapper { position: relative; width: 100%; height: 480px; margin-top: 10px; }
@@ -25,6 +25,7 @@
     .score-high { background: #089981; color: #fff; }
     .score-low { background: #f23645; color: #fff; }
     .score-mid { background: #e2a000; color: #fff; }
+    
     .plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-top: 12px; text-align: center; }
     .plan-box { background: #2a2e39; padding: 10px; border-radius: 6px; }
     .plan-box div:first-child { font-size: 12px; color: #787b86; margin-bottom: 4px; }
@@ -35,6 +36,10 @@
     .tag-minus { background: rgba(242, 54, 69, 0.2); color: #f23645; border: 1px solid #f23645; }
     .reason-item { padding: 8px 0; border-bottom: 1px solid #2a2e39; font-size: 14px; display: flex; align-items: center; }
     .loading { text-align: center; padding: 15px; color: #2962ff; font-size: 15px; display: none; }
+
+    .toggle-group { display: flex; gap: 8px; align-items: center; }
+    .toggle-btn { padding: 5px 10px; font-size: 12px; border-radius: 4px; border: 1px solid #363a45; background: #2a2e39; cursor: pointer; color: #888; }
+    .toggle-btn.active { background: #2962ff; color: #fff; border-color: #2962ff; }
   </style>
 </head>
 <body>
@@ -54,10 +59,10 @@
       </div>
       <button onclick="analyzeStock()">開始量化跑分</button>
     </div>
-    <span style="font-size: 12px; color: #787b86;">同步 TradingView SMC 著色訂單塊 (OB) 與風控防禦</span>
+    <span style="font-size: 12px; color: #787b86;">SMC 訂單塊 (OB) + Wyckoff 箱體 + 操盤建議生成器</span>
   </div>
 
-  <div id="loading" class="loading">⏳ 正在計算 SMC 樞紐點、OB 著色塊與風控鎖定...</div>
+  <div id="loading" class="loading">⏳ 正在計算 SMC 樞紐點、威科夫箱體與操盤建議...</div>
 
   <div class="card" id="resultCard" style="display:none;">
     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
@@ -71,11 +76,18 @@
       <div id="scoreBadge" class="score-badge"></div>
     </div>
 
+    <!-- 建議入場點位卡片 -->
     <div class="plan-grid">
-      <div class="plan-box"><div>建議位 (Close)</div><div id="pEntry" style="color:#2962ff;">-</div></div>
-      <div class="plan-box"><div>建議止損位</div><div id="pStop" style="color:#f23645;">-</div></div>
+      <div class="plan-box"><div>建議入場位</div><div id="pEntry" style="color:#2962ff;">-</div></div>
+      <div class="plan-box"><div>建議硬止損位</div><div id="pStop" style="color:#f23645;">-</div></div>
       <div class="plan-box"><div>目標止盈位</div><div id="pTake" style="color:#089981;">-</div></div>
-      <div class="plan-box"><div>預設盈虧比</div><div id="pRR">-</div></div>
+      <div class="plan-box"><div>預計收益率</div><div id="pProfit" style="color:#e2a000;">-</div></div>
+    </div>
+
+    <!-- 操盤實戰建議 -->
+    <div style="margin-top: 15px; padding: 12px; background: #262b38; border-radius: 6px; border-left: 4px solid #2962ff;">
+      <h4 style="color: #fff; margin-bottom: 6px;">💡 交易操盤具體策略建議：</h4>
+      <p id="strategyAdvice" style="font-size: 14px; color: #d1d4dc; line-height: 1.6;"></p>
     </div>
 
     <h4 style="margin-top: 18px; color: #fff;">⚖️ 真實指標評分依據明細：</h4>
@@ -83,9 +95,16 @@
   </div>
 
   <div class="card" style="position: relative;">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-      <h3 style="color: #fff;" id="chartTitle">📉 互動 K 線圖 (標示 SMC 訂單塊)</h3>
-      <span style="font-size: 12px; color: #787b86;">日期格式: YYYY/MM/DD</span>
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+      <h3 style="color: #fff;" id="chartTitle">📉 互動 K 線圖</h3>
+      
+      <!-- 圖示開關按鈕組 -->
+      <div class="toggle-group">
+        <span style="font-size: 12px; color: #787b86;">圖示開關：</span>
+        <button id="btnToggleOB" class="toggle-btn active" onclick="toggleOverlay('OB')">SMC 訂單塊</button>
+        <button id="btnToggleWyckoff" class="toggle-btn active" onclick="toggleOverlay('WYCKOFF')">威科夫箱體</button>
+        <button id="btnToggleLines" class="toggle-btn active" onclick="toggleOverlay('LINES')">關卡水平線</button>
+      </div>
     </div>
 
     <div class="chart-wrapper">
@@ -99,7 +118,12 @@
   let chart = null;
   let candlestickSeries = null;
   let priceLines = [];
-  let currentSmcBoxes = [];
+  let rawResponseData = null;
+
+  // 圖示顯示狀態
+  let showOB = true;
+  let showWyckoff = true;
+  let showLines = true;
 
   const WORKER_URL = "https://stock-api.senmao.workers.dev";
 
@@ -144,6 +168,22 @@
     });
   }
 
+  function toggleOverlay(type) {
+    if (type === 'OB') {
+      showOB = !showOB;
+      document.getElementById('btnToggleOB').classList.toggle('active', showOB);
+    } else if (type === 'WYCKOFF') {
+      showWyckoff = !showWyckoff;
+      document.getElementById('btnToggleWyckoff').classList.toggle('active', showWyckoff);
+    } else if (type === 'LINES') {
+      showLines = !showLines;
+      document.getElementById('btnToggleLines').classList.toggle('active', showLines);
+      if (showLines && rawResponseData) renderPriceLines(rawResponseData.price_lines);
+      else clearPriceLines();
+    }
+    drawCanvasBoxes();
+  }
+
   function clearPriceLines() {
     if (candlestickSeries && priceLines.length > 0) {
       priceLines.forEach(line => {
@@ -155,7 +195,7 @@
 
   function renderPriceLines(lines) {
     clearPriceLines();
-    if (!lines || !Array.isArray(lines)) return;
+    if (!lines || !Array.isArray(lines) || !showLines) return;
 
     lines.forEach(l => {
       if (l && l.price && !isNaN(l.price)) {
@@ -174,11 +214,12 @@
     });
   }
 
+  // 🔴 Canvas 背景半透明區塊渲染 (包含 SMC OB 與 威科夫箱體)
   function drawCanvasBoxes() {
     try {
       const canvas = document.getElementById('overlay-canvas');
       const container = document.getElementById('chart-container');
-      if (!canvas || !container || !chart || !candlestickSeries || !currentSmcBoxes) return;
+      if (!canvas || !container || !chart || !candlestickSeries || !rawResponseData) return;
 
       const dpr = window.devicePixelRatio || 1;
       canvas.width = container.clientWidth * dpr;
@@ -190,9 +231,9 @@
 
       const timeScale = chart.timeScale();
 
-      currentSmcBoxes.forEach(box => {
-        if (!box.top || !box.bottom) return;
-
+      // 1. 渲染威科夫 Wyckoff 吸籌/派發箱體
+      if (showWyckoff && rawResponseData.wyckoff_box) {
+        const box = rawResponseData.wyckoff_box;
         const y1 = candlestickSeries.priceToCoordinate(box.top);
         const y2 = candlestickSeries.priceToCoordinate(box.bottom);
 
@@ -208,18 +249,55 @@
           const rectH = Math.abs(y2 - y1);
           const rectW = Math.max(10, x2 - x1);
 
-          ctx.fillStyle = box.color || 'rgba(242, 54, 69, 0.3)';
+          ctx.fillStyle = box.color;
           ctx.fillRect(x1, rectY, rectW, rectH);
 
-          ctx.strokeStyle = box.borderColor || '#f23645';
-          ctx.lineWidth = 1;
+          ctx.strokeStyle = box.borderColor;
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([6, 6]);
           ctx.strokeRect(x1, rectY, rectW, rectH);
+          ctx.setLineDash([]);
 
-          ctx.fillStyle = box.borderColor || '#ffffff';
+          ctx.fillStyle = box.borderColor;
           ctx.font = 'bold 12px sans-serif';
-          ctx.fillText(box.label || 'Order Block', x1 + 10, rectY + 16);
+          ctx.fillText(box.label, x1 + 15, rectY + 20);
         }
-      });
+      }
+
+      // 2. 渲染 SMC OB 訂單塊
+      if (showOB && rawResponseData.smc_boxes) {
+        rawResponseData.smc_boxes.forEach(box => {
+          if (!box.top || !box.bottom) return;
+
+          const y1 = candlestickSeries.priceToCoordinate(box.top);
+          const y2 = candlestickSeries.priceToCoordinate(box.bottom);
+
+          if (y1 !== null && y2 !== null) {
+            let x1 = 0;
+            if (box.startTime) {
+              const coord = timeScale.timeToCoordinate(box.startTime);
+              if (coord !== null && coord > 0) x1 = coord;
+            }
+            const x2 = container.clientWidth;
+
+            const rectY = Math.min(y1, y2);
+            const rectH = Math.abs(y2 - y1);
+            const rectW = Math.max(10, x2 - x1);
+
+            ctx.fillStyle = box.color || 'rgba(242, 54, 69, 0.3)';
+            ctx.fillRect(x1, rectY, rectW, rectH);
+
+            ctx.strokeStyle = box.borderColor || '#f23645';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x1, rectY, rectW, rectH);
+
+            ctx.fillStyle = box.borderColor || '#ffffff';
+            ctx.font = 'bold 11px sans-serif';
+            ctx.fillText(box.label || 'Order Block', x1 + 10, rectY + 16);
+          }
+        });
+      }
+
     } catch (e) {
       console.error('Canvas overlay error:', e);
     }
@@ -240,6 +318,7 @@
     try {
       const res = await fetch(`${WORKER_URL}/?stock_id=${stockId}&rr=${rr}`);
       const data = await res.json();
+      rawResponseData = data;
 
       if (data.error) throw new Error(data.error);
 
@@ -247,27 +326,19 @@
         candlestickSeries.setData(data.kline);
         chart.timeScale().fitContent();
 
-        // 1. 安全繪製水平價格線
-        try {
-          renderPriceLines(data.price_lines);
-        } catch(e) { console.error('PriceLines error:', e); }
+        renderPriceLines(data.price_lines);
+        if (data.markers && Array.isArray(data.markers)) {
+          const sortedMarkers = [...data.markers].sort((a, b) => (a.time > b.time ? 1 : -1));
+          candlestickSeries.setMarkers(sortedMarkers);
+        }
 
-        // 2. 安全繪製 K 棒上的標籤箭頭 (確保排序後載入)
-        try {
-          if (data.markers && Array.isArray(data.markers)) {
-            const sortedMarkers = [...data.markers].sort((a, b) => (a.time > b.time ? 1 : -1));
-            candlestickSeries.setMarkers(sortedMarkers);
-          }
-        } catch(e) { console.error('Markers error:', e); }
-
-        // 3. 繪製背景 OB 半透明著色色塊
-        currentSmcBoxes = data.smc_boxes || [];
         setTimeout(() => drawCanvasBoxes(), 150);
       }
 
+      // 清潔乾淨的標題
       const displayName = data.stock_name ? `${data.stock_id} ${data.stock_name}` : data.stock_id;
       document.getElementById('stockTitle').innerText = displayName;
-      document.getElementById('chartTitle').innerText = `📉 ${displayName} K 線圖 (標示 SMC 訂單塊與 CHoCH 關卡)`;
+      document.getElementById('chartTitle').innerText = `📉 ${displayName} K 線圖`;
 
       document.getElementById('signalText').innerText = `[${data.signal}]`;
       const badge = document.getElementById('scoreBadge');
@@ -277,7 +348,9 @@
       document.getElementById('pEntry').innerText = `$${data.trade_plan.entry}`;
       document.getElementById('pStop').innerText = `$${data.trade_plan.stop_loss}`;
       document.getElementById('pTake').innerText = `$${data.trade_plan.take_profit}`;
-      document.getElementById('pRR').innerText = `1 : ${data.trade_plan.rr_ratio}`;
+      document.getElementById('pProfit').innerText = `+${data.trade_plan.profit_pct}%`;
+
+      document.getElementById('strategyAdvice').innerText = data.strategy_advice || '無具體操盤建議。';
 
       const reasonsContainer = document.getElementById('reasonsContainer');
       reasonsContainer.innerHTML = '';
