@@ -16,7 +16,11 @@
     input { width: 100px; }
     button { background: #2962ff; border: none; cursor: pointer; font-weight: bold; }
     button:hover { background: #1e4bd8; }
-    #chart-container { height: 480px; width: 100%; position: relative; margin-top: 10px; }
+    
+    .chart-wrapper { position: relative; width: 100%; height: 480px; margin-top: 10px; }
+    #chart-container { width: 100%; height: 100%; }
+    #overlay-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+
     .score-badge { padding: 8px 16px; border-radius: 20px; font-weight: bold; font-size: 20px; }
     .score-high { background: #089981; color: #fff; }
     .score-low { background: #f23645; color: #fff; }
@@ -42,7 +46,7 @@
     <div class="inputs-group">
       <div>
         <label>股票代碼：</label>
-        <input type="text" id="stockId" value="2615" placeholder="例如 2615">
+        <input type="text" id="stockId" value="2330" placeholder="例如 2330">
       </div>
       <div>
         <label>盈虧比 (R:R)：</label>
@@ -50,10 +54,10 @@
       </div>
       <button onclick="analyzeStock()">開始量化跑分</button>
     </div>
-    <span style="font-size: 12px; color: #787b86;">SMC 訂單塊 (OB) + 均線 + RSI 強力風控鎖定</span>
+    <span style="font-size: 12px; color: #787b86;">同步 TradingView SMC 著色訂單塊 (OB)、FVG 缺口與 CHoCH 轉折</span>
   </div>
 
-  <div id="loading" class="loading">⏳ 正在計算 SMC 樞紐點、訂單塊 (OB) 與風控鎖定...</div>
+  <div id="loading" class="loading">⏳ 正在計算 SMC 樞紐點、OB 著色塊與 FVG 缺口...</div>
 
   <div class="card" id="resultCard" style="display:none;">
     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
@@ -80,17 +84,22 @@
 
   <div class="card" style="position: relative;">
     <div style="display: flex; justify-content: space-between; align-items: center;">
-      <h3 style="color: #fff;" id="chartTitle">📉 互動 K 線圖 (標示 SMC 訂單塊與波段關卡)</h3>
+      <h3 style="color: #fff;" id="chartTitle">📉 互動 K 線圖 (同步 TV SMC 著色塊標示)</h3>
       <span style="font-size: 12px; color: #787b86;">日期格式: YYYY/MM/DD</span>
     </div>
-    <div id="chart-container"></div>
+
+    <!-- 畫布圖表區域 -->
+    <div class="chart-wrapper">
+      <div id="chart-container"></div>
+      <canvas id="overlay-canvas"></canvas>
+    </div>
   </div>
 </div>
 
 <script>
   let chart = null;
   let candlestickSeries = null;
-  let priceLines = [];
+  let currentSmcData = null;
 
   const WORKER_URL = "https://stock-api.senmao.workers.dev";
 
@@ -124,43 +133,89 @@
       wickUpColor: '#089981', wickDownColor: '#f23645'
     });
 
+    // 訂閱縮放與拖曳事件，實時重繪 Canvas 色塊
+    chart.timeScale().subscribeVisibleLogicalRangeChange(() => drawCanvasOverlays());
+    chart.timeScale().subscribeCrosshairMove(() => drawCanvasOverlays());
+
     window.addEventListener('resize', () => {
-      if (chart && container) chart.applyOptions({ width: container.clientWidth });
+      if (chart && container) {
+        chart.applyOptions({ width: container.clientWidth });
+        drawCanvasOverlays();
+      }
     });
   }
 
-  function clearPriceLines() {
-    if (candlestickSeries && priceLines.length > 0) {
-      priceLines.forEach(line => candlestickSeries.removePriceLine(line));
-      priceLines = [];
-    }
-  }
+  // 🔴 核心 HTML5 Canvas 色塊渲染引擎
+  function drawCanvasOverlays() {
+    const canvas = document.getElementById('overlay-canvas');
+    const container = document.getElementById('chart-container');
+    if (!canvas || !container || !chart || !candlestickSeries || !currentSmcData) return;
 
-  function drawSMCLines(smc) {
-    clearPriceLines();
-    if (!smc) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = container.clientWidth * dpr;
+    canvas.height = container.clientHeight * dpr;
 
-    const lines = [
-      { price: smc.bearish_ob.top, color: '#f23645', title: '🔴 Bearish OB 頂部 ($' + smc.bearish_ob.top + ')' },
-      { price: smc.bearish_ob.bottom, color: '#f23645', title: '🔴 Bearish OB 賣壓下軌 ($' + smc.bearish_ob.bottom + ')' },
-      { price: smc.fib_0382, color: '#e2a000', title: 'Fib 0.382' },
-      { price: smc.fib_0500, color: '#2962ff', title: 'Fib 0.500' },
-      { price: smc.fib_0618, color: '#089981', title: 'Fib 0.618 (折扣進場區)' },
-      { price: smc.bullish_ob.top, color: '#1848cc', title: '🔵 Bullish OB 買盤上軌 ($' + smc.bullish_ob.top + ')' },
-      { price: smc.bullish_ob.bottom, color: '#1848cc', title: '🔵 Bullish OB 底部 ($' + smc.bullish_ob.bottom + ')' }
-    ];
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, container.clientWidth, container.clientHeight);
 
-    lines.forEach(l => {
-      const pl = candlestickSeries.createPriceLine({
-        price: l.price,
-        color: l.color,
-        lineWidth: 1,
-        lineStyle: LightweightCharts.LineStyle.Dashed,
-        axisLabelVisible: true,
-        title: l.title
+    const timeScale = chart.timeScale();
+
+    // 1. 繪製 OB 與 FVG 著色矩形塊
+    if (currentSmcData.boxes && Array.isArray(currentSmcData.boxes)) {
+      currentSmcData.boxes.forEach(box => {
+        const x1 = timeScale.timeToCoordinate(box.startTime) || 0;
+        const x2 = container.clientWidth; // 延伸至圖表右側
+
+        const y1 = candlestickSeries.priceToCoordinate(box.top);
+        const y2 = candlestickSeries.priceToCoordinate(box.bottom);
+
+        if (y1 !== null && y2 !== null) {
+          const rectX = Math.min(x1, x2);
+          const rectY = Math.min(y1, y2);
+          const rectW = Math.abs(x2 - x1);
+          const rectH = Math.abs(y2 - y1);
+
+          // 填滿半透明色帶
+          ctx.fillStyle = box.color;
+          ctx.fillRect(rectX, rectY, rectW, rectH);
+
+          // 邊框
+          ctx.strokeStyle = box.borderColor;
+          ctx.lineWidth = 1;
+          ctx.strokeRect(rectX, rectY, rectW, rectH);
+
+          // 標籤文字
+          ctx.fillStyle = box.borderColor;
+          ctx.font = "bold 11px sans-serif";
+          ctx.fillText(box.label, rectX + 10, rectY + 14);
+        }
       });
-      priceLines.push(pl);
-    });
+    }
+
+    // 2. 繪製 CHoCH 轉折虛線與文字標籤
+    if (currentSmcData.choch) {
+      const choch = currentSmcData.choch;
+      const x1 = timeScale.timeToCoordinate(choch.startTime) || 0;
+      const x2 = container.clientWidth;
+      const y = candlestickSeries.priceToCoordinate(choch.price);
+
+      if (y !== null) {
+        ctx.beginPath();
+        ctx.setLineDash([4, 4]); // 虛線
+        ctx.strokeStyle = choch.type === 'BULLISH' ? '#2157f3' : '#f23645';
+        ctx.lineWidth = 1.5;
+        ctx.moveTo(x1, y);
+        ctx.lineTo(x2, y);
+        ctx.stroke();
+
+        // CHoCH 標籤
+        ctx.setLineDash([]);
+        ctx.fillStyle = choch.type === 'BULLISH' ? '#2157f3' : '#f23645';
+        ctx.font = "bold 12px sans-serif";
+        ctx.fillText(`CHoCH ($${choch.price})`, x1 + 20, y - 6);
+      }
+    }
   }
 
   async function analyzeStock() {
@@ -184,12 +239,15 @@
       if (candlestickSeries && data.kline && data.kline.length > 0) {
         candlestickSeries.setData(data.kline);
         chart.timeScale().fitContent();
-        drawSMCLines(data.smc_levels);
+
+        // 存入全域 SMC 數據並觸發 Canvas 繪圖
+        currentSmcData = data.smc_data;
+        setTimeout(() => drawCanvasOverlays(), 100);
       }
 
       const displayName = data.stock_name ? `${data.stock_id} ${data.stock_name}` : data.stock_id;
       document.getElementById('stockTitle').innerText = displayName;
-      document.getElementById('chartTitle').innerText = `📉 ${displayName} K 線圖 (標示 SMC 訂單塊)`;
+      document.getElementById('chartTitle').innerText = `📉 ${displayName} K 線圖 (同步 TV SMC 著色塊標示)`;
 
       document.getElementById('signalText').innerText = `[${data.signal}]`;
       const badge = document.getElementById('scoreBadge');
