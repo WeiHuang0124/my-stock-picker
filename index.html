@@ -153,21 +153,20 @@
     }
   }
 
-  // 🔴 100% 原生價格水平線繪製 (永遠不會失效)
   function renderPriceLines(lines) {
     clearPriceLines();
     if (!lines || !Array.isArray(lines)) return;
 
     lines.forEach(l => {
-      if (l.price && !isNaN(l.price)) {
+      if (l && l.price && !isNaN(l.price)) {
         try {
           const pl = candlestickSeries.createPriceLine({
-            price: l.price,
-            color: l.color,
+            price: Number(l.price),
+            color: l.color || '#2962ff',
             lineWidth: 1,
             lineStyle: LightweightCharts.LineStyle.Dashed,
             axisLabelVisible: true,
-            title: l.title
+            title: l.title || ''
           });
           priceLines.push(pl);
         } catch (e) {}
@@ -175,7 +174,6 @@
     });
   }
 
-  // 🔴 Canvas 背景半透明區塊渲染 (具備 Try-Catch 絕不卡死)
   function drawCanvasBoxes() {
     try {
       const canvas = document.getElementById('overlay-canvas');
@@ -190,16 +188,36 @@
       ctx.scale(dpr, dpr);
       ctx.clearRect(0, 0, container.clientWidth, container.clientHeight);
 
+      const timeScale = chart.timeScale();
+
       currentSmcBoxes.forEach(box => {
+        if (!box.top || !box.bottom) return;
+
         const y1 = candlestickSeries.priceToCoordinate(box.top);
         const y2 = candlestickSeries.priceToCoordinate(box.bottom);
 
         if (y1 !== null && y2 !== null) {
+          let x1 = 0;
+          if (box.startTime) {
+            const coord = timeScale.timeToCoordinate(box.startTime);
+            if (coord !== null && coord > 0) x1 = coord;
+          }
+          const x2 = container.clientWidth;
+
           const rectY = Math.min(y1, y2);
           const rectH = Math.abs(y2 - y1);
+          const rectW = Math.max(10, x2 - x1);
 
-          ctx.fillStyle = box.color;
-          ctx.fillRect(0, rectY, container.clientWidth, rectH);
+          ctx.fillStyle = box.color || 'rgba(242, 54, 69, 0.3)';
+          ctx.fillRect(x1, rectY, rectW, rectH);
+
+          ctx.strokeStyle = box.borderColor || '#f23645';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x1, rectY, rectW, rectH);
+
+          ctx.fillStyle = box.borderColor || '#ffffff';
+          ctx.font = 'bold 12px sans-serif';
+          ctx.fillText(box.label || 'Order Block', x1 + 10, rectY + 16);
         }
       });
     } catch (e) {
@@ -229,20 +247,27 @@
         candlestickSeries.setData(data.kline);
         chart.timeScale().fitContent();
 
-        // 1. 繪製原生 100% 穩定的線條與箭頭標籤
-        renderPriceLines(data.price_lines);
-        if (data.markers && Array.isArray(data.markers)) {
-          candlestickSeries.setMarkers(data.markers);
-        }
+        // 1. 安全繪製水平價格線
+        try {
+          renderPriceLines(data.price_lines);
+        } catch(e) { console.error('PriceLines error:', e); }
 
-        // 2. 渲染背景 OB 色塊
+        // 2. 安全繪製 K 棒上的標籤箭頭 (確保排序後載入)
+        try {
+          if (data.markers && Array.isArray(data.markers)) {
+            const sortedMarkers = [...data.markers].sort((a, b) => (a.time > b.time ? 1 : -1));
+            candlestickSeries.setMarkers(sortedMarkers);
+          }
+        } catch(e) { console.error('Markers error:', e); }
+
+        // 3. 繪製背景 OB 半透明著色色塊
         currentSmcBoxes = data.smc_boxes || [];
-        setTimeout(() => drawCanvasBoxes(), 100);
+        setTimeout(() => drawCanvasBoxes(), 150);
       }
 
       const displayName = data.stock_name ? `${data.stock_id} ${data.stock_name}` : data.stock_id;
       document.getElementById('stockTitle').innerText = displayName;
-      document.getElementById('chartTitle').innerText = `📉 ${displayName} K 線圖 (已標示 SMC 訂單塊與 CHoCH 關卡)`;
+      document.getElementById('chartTitle').innerText = `📉 ${displayName} K 線圖 (標示 SMC 訂單塊與 CHoCH 關卡)`;
 
       document.getElementById('signalText').innerText = `[${data.signal}]`;
       const badge = document.getElementById('scoreBadge');
