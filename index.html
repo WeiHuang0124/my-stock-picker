@@ -49,7 +49,7 @@
 <div class="container">
   <h2 style="margin-bottom: 15px; color: #fff;">📊 SMC & 威科夫 智慧選股與自動掃描儀</h2>
 
-  <!-- 個股查詢 -->
+  <!-- 個股單獨查詢區塊 -->
   <div class="card control-panel">
     <div class="inputs-group">
       <div>
@@ -71,7 +71,7 @@
         <label>🔍 篩選推薦目標：</label>
         <select id="scanTarget">
           <option value="STRONG_BUY">強力買進 (≥75分)</option>
-          <option value="BUY">偏多卡位 (≥60分)</option>
+          <option value="BUY">偏多卡位 (60~74分)</option>
           <option value="SELL">強烈做空/避險 (≤40分)</option>
         </select>
         <button class="btn-scan" onclick="startScanner()">一鍵自動掃描熱門台股</button>
@@ -100,7 +100,7 @@
 
   <div id="loading" class="loading">⏳ 正在計算 SMC 機構訂單塊 (Order Block) 與黃金分割區間...</div>
 
-  <!-- 個股分析卡片 -->
+  <!-- 個股分析結果卡片 -->
   <div class="card" id="resultCard" style="display:none;">
     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
       <div>
@@ -124,7 +124,7 @@
     <div id="reasonsContainer" style="margin-top: 8px;"></div>
   </div>
 
-  <!-- K 線圖表 -->
+  <!-- K 線圖表區塊 -->
   <div class="card" style="position: relative;">
     <div style="display: flex; justify-content: space-between; align-items: center;">
       <h3 style="color: #fff;" id="chartTitle">📉 互動 K 線圖 (同步 TradingView LuxAlgo 標示)</h3>
@@ -134,7 +134,7 @@
     <div id="chart-container"></div>
   </div>
 
-  <!-- 新聞情報 -->
+  <!-- 新聞情報區塊 -->
   <div class="card" id="newsCard" style="display:none;">
     <h3 style="color: #fff; margin-bottom: 10px;">📰 最新個股新聞情報</h3>
     <div id="newsList"></div>
@@ -145,6 +145,7 @@
   let chart = null;
   let candlestickSeries = null;
   let priceLines = [];
+  let isScanning = false; // 防連點鎖
 
   const WORKER_URL = "https://stock-api.senmao.workers.dev";
 
@@ -309,8 +310,17 @@
     }
   }
 
+  // 🔴 自動掃描選股函數 (含防擊打鎖與精準分數切割)
   async function startScanner() {
-    const target = document.getElementById('scanTarget').value;
+    if (isScanning) {
+      alert('正在掃描中，請稍候...');
+      return;
+    }
+    isScanning = true;
+
+    const targetSelect = document.getElementById('scanTarget');
+    const target = targetSelect.value;
+    const targetText = targetSelect.selectedOptions[0].text;
     const progress = document.getElementById('scanProgress');
     const container = document.getElementById('scanResultContainer');
     const tableBody = document.getElementById('scanTableBody');
@@ -331,10 +341,12 @@
         const data = await res.json();
 
         if (data && !data.error) {
+          let score = data.score;
           let isMatch = false;
-          if (target === 'STRONG_BUY' && data.score >= 75) isMatch = true;
-          else if (target === 'BUY' && data.score >= 60) isMatch = true;
-          else if (target === 'SELL' && data.score <= 40) isMatch = true;
+
+          if (target === 'STRONG_BUY' && score >= 75) isMatch = true;
+          else if (target === 'BUY' && score >= 60 && score < 75) isMatch = true;
+          else if (target === 'SELL' && score <= 40) isMatch = true;
 
           if (isMatch) matchedStocks.push(data);
         }
@@ -342,14 +354,15 @@
         console.error(`掃描 ${code} 失敗:`, e);
       }
 
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise(resolve => setTimeout(resolve, 250));
     }
 
     progress.style.display = 'none';
     container.style.display = 'block';
 
     if (matchedStocks.length === 0) {
-      tableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#787b86;">目前市場無符合「${document.getElementById('scanTarget').selectedOptions[0].text}」條件之標的。</td></tr>`;
+      tableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#787b86;">目前市場無符合「${targetText}」條件之標的。</td></tr>`;
+      isScanning = false;
       return;
     }
 
@@ -366,6 +379,8 @@
       `;
       tableBody.appendChild(tr);
     });
+
+    isScanning = false;
   }
 
   window.onload = () => {
