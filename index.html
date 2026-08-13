@@ -39,8 +39,8 @@
     .reason-item { padding: 8px 0; border-bottom: 1px solid #2a2e39; font-size: 14px; display: flex; align-items: center; }
     .loading { text-align: center; padding: 15px; color: #2962ff; font-size: 15px; display: none; }
 
-    .toggle-group { display: flex; gap: 8px; align-items: center; }
-    .toggle-btn { padding: 5px 10px; font-size: 12px; border-radius: 4px; border: 1px solid #363a45; background: #2a2e39; cursor: pointer; color: #888; }
+    .toggle-group { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .toggle-btn { padding: 5px 8px; font-size: 11px; border-radius: 4px; border: 1px solid #363a45; background: #2a2e39; cursor: pointer; color: #888; }
     .toggle-btn.active { background: #2962ff; color: #fff; border-color: #2962ff; }
 
     .quote-badge { font-size: 16px; font-weight: bold; padding: 4px 10px; border-radius: 6px; display: inline-block; margin-left: 10px; }
@@ -204,6 +204,8 @@
         <button id="btnToggleOB" class="toggle-btn active" onclick="toggleOverlay('OB')">SMC 訂單塊</button>
         <button id="btnToggleWyckoff" class="toggle-btn active" onclick="toggleOverlay('WYCKOFF')">威科夫箱體</button>
         <button id="btnToggleLines" class="toggle-btn active" onclick="toggleOverlay('LINES')">關卡水平線</button>
+        <button id="btnToggleFibRet" class="toggle-btn active" onclick="toggleOverlay('FIB_RET')">FIB 回撤</button>
+        <button id="btnToggleFibExt" class="toggle-btn active" onclick="toggleOverlay('FIB_EXT')">FIB 擴展</button>
       </div>
     </div>
 
@@ -218,11 +220,15 @@
   let chart = null;
   let candlestickSeries = null;
   let priceLines = [];
+  let fibRetLines = [];
+  let fibExtLines = [];
   let rawResponseData = null;
 
   let showOB = true;
   let showWyckoff = true;
   let showLines = true;
+  let showFibRet = true;
+  let showFibExt = true;
 
   const WORKER_URL = "https://stock-api.senmao.workers.dev";
   let appLogs = [];
@@ -334,6 +340,18 @@
       addLog('DEBUG', `切換圖層 關卡水平線: ${showLines}`);
       if (showLines && rawResponseData) renderPriceLines(rawResponseData.price_lines);
       else clearPriceLines();
+    } else if (type === 'FIB_RET') {
+      showFibRet = !showFibRet;
+      document.getElementById('btnToggleFibRet').classList.toggle('active', showFibRet);
+      addLog('DEBUG', `切換圖層 FIB 回撤: ${showFibRet}`);
+      if (showFibRet && rawResponseData) renderFibRetLines(rawResponseData.fib_retracement);
+      else clearFibRetLines();
+    } else if (type === 'FIB_EXT') {
+      showFibExt = !showFibExt;
+      document.getElementById('btnToggleFibExt').classList.toggle('active', showFibExt);
+      addLog('DEBUG', `切換圖層 FIB 擴展: ${showFibExt}`);
+      if (showFibExt && rawResponseData) renderFibExtLines(rawResponseData.fib_extension);
+      else clearFibExtLines();
     }
     drawCanvasBoxes();
   }
@@ -363,6 +381,66 @@
             title: l.title || ''
           });
           priceLines.push(pl);
+        } catch (e) {}
+      }
+    });
+  }
+
+  function clearFibRetLines() {
+    if (candlestickSeries && fibRetLines.length > 0) {
+      fibRetLines.forEach(line => {
+        try { candlestickSeries.removePriceLine(line); } catch(e){}
+      });
+      fibRetLines = [];
+    }
+  }
+
+  function renderFibRetLines(lines) {
+    clearFibRetLines();
+    if (!lines || !Array.isArray(lines) || !showFibRet) return;
+
+    lines.forEach(l => {
+      if (l && l.price && !isNaN(l.price)) {
+        try {
+          const pl = candlestickSeries.createPriceLine({
+            price: Number(l.price),
+            color: l.color || '#ab47bc',
+            lineWidth: 1,
+            lineStyle: LightweightCharts.LineStyle.Dotted,
+            axisLabelVisible: true,
+            title: l.title || ''
+          });
+          fibRetLines.push(pl);
+        } catch (e) {}
+      }
+    });
+  }
+
+  function clearFibExtLines() {
+    if (candlestickSeries && fibExtLines.length > 0) {
+      fibExtLines.forEach(line => {
+        try { candlestickSeries.removePriceLine(line); } catch(e){}
+      });
+      fibExtLines = [];
+    }
+  }
+
+  function renderFibExtLines(lines) {
+    clearFibExtLines();
+    if (!lines || !Array.isArray(lines) || !showFibExt) return;
+
+    lines.forEach(l => {
+      if (l && l.price && !isNaN(l.price)) {
+        try {
+          const pl = candlestickSeries.createPriceLine({
+            price: Number(l.price),
+            color: l.color || '#ff7043',
+            lineWidth: 1,
+            lineStyle: LightweightCharts.LineStyle.Dotted,
+            axisLabelVisible: true,
+            title: l.title || ''
+          });
+          fibExtLines.push(pl);
         } catch (e) {}
       }
     });
@@ -497,6 +575,9 @@
         chart.timeScale().fitContent();
 
         renderPriceLines(data.price_lines);
+        renderFibRetLines(data.fib_retracement);
+        renderFibExtLines(data.fib_extension);
+
         if (data.markers && Array.isArray(data.markers)) {
           const sortedMarkers = [...data.markers].sort((a, b) => (a.time > b.time ? 1 : -1));
           candlestickSeries.setMarkers(sortedMarkers);
