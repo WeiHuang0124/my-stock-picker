@@ -152,7 +152,7 @@
       <button onclick="analyzeStock()">開始量化跑分</button>
       <button class="btn-log" onclick="downloadLogs()">📥 下載運行 Log</button>
     </div>
-    <span style="font-size: 12px; color: #787b86;">TRADING HELPER：新聞超連結修復 + 數學閉環總分</span>
+    <span style="font-size: 12px; color: #787b86;">TRADING HELPER 專業量化終端機</span>
   </div>
 
   <div id="loading" class="loading">⏳ 正在同步技術面、基本面與最新新聞情報...</div>
@@ -165,7 +165,6 @@
           <span id="quoteInfo" class="quote-badge"></span>
           <span style="font-size: 18px; margin-left: 15px;" id="signalText"></span>
         </h3>
-        <p style="font-size: 13px; color: #787b86; margin-top: 4px;">TRADING HELPER 量化評分系統 | 總分與明細 100% 數學一致</p>
       </div>
       <div id="scoreBadge" class="score-badge"></div>
     </div>
@@ -571,7 +570,7 @@
         data.news.forEach(n => {
           const div = document.createElement('div');
           div.className = 'news-item';
-          // 🛡️ 使用絕對安全的外部 Google 搜尋 URL，避免被當成相對路徑或虛擬路徑
+          // 🛡️ 強制使用標準絕對路徑 URL，確保點擊時直接開啟外部 Google 搜尋
           const googleSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(n.title)}`;
           div.innerHTML = `<a href="${googleSearchUrl}" target="_blank" rel="noopener noreferrer" class="news-link">${n.title}</a><span class="news-date">${n.date}</span>`;
           newsList.appendChild(div);
