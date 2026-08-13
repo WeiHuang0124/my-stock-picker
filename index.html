@@ -126,7 +126,7 @@
     resultCard.style.display = 'none';
 
     // ⚠️ 請確認這裡有替換成你的 Cloudflare Worker 網址
-    const WORKER_URL = "https://stock-api.senmao.workers.dev/"; 
+    const WORKER_URL = "https://stock-api.senmao.workers.dev";
 
     try {
       const res = await fetch(`${WORKER_URL}/?stock_id=${stockId}&rr=${rr}`);
