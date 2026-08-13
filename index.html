@@ -79,7 +79,7 @@
 <script>
   let chart, candlestickSeries;
 
-  // 初始化 TradingView 圖表
+  // 初始化 TradingView 圖表 (兼容舊版與 v4.x 新版 API)
   function initChart() {
     const container = document.getElementById('chart-container');
     chart = LightweightCharts.createChart(container, {
@@ -94,11 +94,18 @@
       }
     });
 
-    candlestickSeries = chart.addCandlestickSeries({
+    // 兼容處理：自動判斷 Lightweight Charts API 版本
+    const seriesOptions = {
       upColor: '#089981', downColor: '#f23645',
       borderUpColor: '#089981', borderDownColor: '#f23645',
       wickUpColor: '#089981', wickDownColor: '#f23645'
-    });
+    };
+
+    if (chart.addCandlestickSeries) {
+      candlestickSeries = chart.addCandlestickSeries(seriesOptions);
+    } else if (LightweightCharts.CandlestickSeries) {
+      candlestickSeries = chart.addSeries(LightweightCharts.CandlestickSeries, seriesOptions);
+    }
 
     window.addEventListener('resize', () => {
       chart.applyOptions({ width: container.clientWidth });
@@ -116,8 +123,8 @@
     loading.style.display = 'block';
     resultCard.style.display = 'none';
 
-    // 替換成你部署後的 Cloudflare Worker URL (例如: https://my-worker.xxxx.workers.dev)
-    const WORKER_URL = "https://stock-api.senmao.workers.dev/"; 
+    // ⚠️ 請確認這裡有替換成你的 Cloudflare Worker 網址
+    const WORKER_URL = "YOUR_WORKER_URL_HERE"; 
 
     try {
       const res = await fetch(`${WORKER_URL}/?stock_id=${stockId}&rr=${rr}`);
@@ -126,8 +133,10 @@
       if (data.error) throw new Error(data.error);
 
       // 1. 渲染 K 線
-      candlestickSeries.setData(data.kline);
-      chart.timeScale().fitContent();
+      if (candlestickSeries && data.kline && data.kline.length > 0) {
+        candlestickSeries.setData(data.kline);
+        chart.timeScale().fitContent();
+      }
 
       // 2. 渲染分數與訊號
       document.getElementById('signalText').innerText = data.signal;
