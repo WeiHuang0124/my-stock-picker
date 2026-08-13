@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>SMC & 威科夫 多維度量化跑分系統</title>
+  <title>SMC & 威科夫 多維度量化個股分析儀</title>
   <script src="https://unpkg.com/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -45,9 +45,9 @@
     .quote-up { background: rgba(8, 153, 129, 0.2); color: #089981; border: 1px solid #089981; }
     .quote-down { background: rgba(242, 54, 69, 0.2); color: #f23645; border: 1px solid #f23645; }
 
-    .news-item { padding: 8px 0; border-bottom: 1px solid #2a2e39; font-size: 14px; display: flex; justify-content: space-between; gap: 10px; }
-    .news-link { color: #2962ff; text-decoration: none; }
-    .news-link:hover { text-decoration: underline; }
+    .news-item { padding: 10px 0; border-bottom: 1px solid #2a2e39; font-size: 14px; display: flex; justify-content: space-between; gap: 15px; align-items: center; }
+    .news-link { color: #58a6ff; text-decoration: underline; font-weight: 500; }
+    .news-link:hover { color: #79c0ff; }
     .news-date { color: #787b86; white-space: nowrap; font-size: 12px; }
   </style>
 </head>
@@ -60,7 +60,7 @@
     <div class="inputs-group">
       <div>
         <label>股票代碼：</label>
-        <input type="text" id="stockId" value="4991" placeholder="例如 4991">
+        <input type="text" id="stockId" value="2330" placeholder="例如 2330">
       </div>
       <div>
         <label>盈虧比 (R:R)：</label>
@@ -68,7 +68,7 @@
       </div>
       <button onclick="analyzeStock()">開始量化跑分</button>
     </div>
-    <span style="font-size: 12px; color: #787b86;">全盤通用模型：動態多空收益率 + 新聞超連結</span>
+    <span style="font-size: 12px; color: #787b86;">全盤通用模型：動態多空收益率 + 谷歌搜尋新聞超連結</span>
   </div>
 
   <div id="loading" class="loading">⏳ 正在同步技術面、基本面與最新新聞情報...</div>
@@ -109,7 +109,7 @@
   </div>
 
   <div class="card" id="newsCard" style="display:none;">
-    <h3 style="color: #fff; margin-bottom: 10px;">📰 最新個股新聞情報與輿論 (點擊標題可聯結 Google 搜尋)</h3>
+    <h3 style="color: #fff; margin-bottom: 10px;">📰 最新個股新聞情報與輿論 (點擊標題可直接 Google 搜尋)</h3>
     <div id="newsList"></div>
   </div>
 
