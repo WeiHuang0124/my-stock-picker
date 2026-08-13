@@ -3,20 +3,23 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>SMC & 威科夫 選股與指標分析系統</title>
+  <title>SMC & 威科夫 多時框選股跑分系統</title>
   <script src="https://unpkg.com/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #131722; color: #d1d4dc; padding: 15px; }
-    .container { max-width: 1050px; margin: 0 auto; }
+    .container { max-width: 1080px; margin: 0 auto; }
     .card { background: #1e222d; border-radius: 8px; padding: 15px; margin-bottom: 15px; border: 1px solid #2a2e39; }
-    .control-panel { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-    input, button { padding: 10px 14px; border-radius: 6px; border: 1px solid #363a45; background: #2a2e39; color: #fff; font-size: 15px; }
-    input { width: 110px; }
-    button { background: #2962ff; border: none; cursor: pointer; font-weight: bold; flex-grow: 1; max-width: 150px; }
+    .control-panel { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+    .inputs-group { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    input, button, select { padding: 9px 12px; border-radius: 6px; border: 1px solid #363a45; background: #2a2e39; color: #fff; font-size: 14px; }
+    input { width: 100px; }
+    button { background: #2962ff; border: none; cursor: pointer; font-weight: bold; }
     button:hover { background: #1e4bd8; }
-    #chart-container { height: 460px; width: 100%; position: relative; margin-top: 10px; }
-    .score-badge { display: inline-block; padding: 8px 16px; border-radius: 20px; font-weight: bold; font-size: 20px; }
+    .tf-btn { background: #363a45; color: #b2b5be; border: none; cursor: pointer; }
+    .tf-btn.active { background: #2962ff; color: #fff; }
+    #chart-container { height: 480px; width: 100%; position: relative; margin-top: 10px; }
+    .score-badge { padding: 8px 16px; border-radius: 20px; font-weight: bold; font-size: 20px; }
     .score-high { background: #089981; color: #fff; }
     .score-low { background: #f23645; color: #fff; }
     .score-mid { background: #e2a000; color: #fff; }
@@ -24,31 +27,49 @@
     .plan-box { background: #2a2e39; padding: 10px; border-radius: 6px; }
     .plan-box div:first-child { font-size: 12px; color: #787b86; margin-bottom: 4px; }
     .plan-box div:last-child { font-size: 16px; font-weight: bold; }
-    ul.reasons-list { margin-top: 10px; padding-left: 20px; font-size: 14px; line-height: 1.7; color: #b2b5be; }
+    
+    /* 加扣分標籤樣式 */
+    .delta-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; margin-right: 8px; }
+    .tag-plus { background: rgba(8, 153, 129, 0.2); color: #089981; border: 1px solid #089981; }
+    .tag-minus { background: rgba(242, 54, 69, 0.2); color: #f23645; border: 1px solid #f23645; }
+    .reason-item { padding: 8px 0; border-bottom: 1px solid #2a2e39; font-size: 14px; display: flex; align-items: center; }
+
     .news-item { padding: 8px 0; border-bottom: 1px solid #2a2e39; font-size: 14px; display: flex; justify-content: space-between; gap: 10px; }
     .news-date { color: #787b86; white-space: nowrap; font-size: 12px; }
     .loading { text-align: center; padding: 20px; color: #2962ff; font-size: 16px; display: none; }
+    .chart-info-overlay { position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(30, 34, 45, 0.85); padding: 8px 12px; border-radius: 6px; font-size: 12px; border: 1px solid #363a45; pointer-events: none; }
   </style>
 </head>
 <body>
 
 <div class="container">
-  <h2 style="margin-bottom: 15px; color: #fff;">📊 SMC & 威科夫 智慧選股跑分儀</h2>
+  <h2 style="margin-bottom: 15px; color: #fff;">📊 SMC & 威科夫 多時框智慧選股跑分儀</h2>
 
+  <!-- 控制面板與時框選擇 -->
   <div class="card control-panel">
-    <div>
-      <label>股票代碼：</label>
-      <input type="text" id="stockId" value="5904" placeholder="例如 2330">
+    <div class="inputs-group">
+      <div>
+        <label>股票代碼：</label>
+        <input type="text" id="stockId" value="2330" placeholder="例如 2330">
+      </div>
+      <div>
+        <label>盈虧比 (R:R)：</label>
+        <input type="number" id="rrRatio" value="3.0" step="0.5" min="1">
+      </div>
+      <button onclick="analyzeStock()">開始跑分</button>
     </div>
-    <div>
-      <label>設定盈虧比 (R:R)：</label>
-      <input type="number" id="rrRatio" value="3.0" step="0.5" min="1">
+
+    <!-- 多時框按鈕切換 -->
+    <div class="inputs-group">
+      <span style="font-size: 13px; color: #787b86;">分析週期：</span>
+      <button class="tf-btn active" id="tf-Day" onclick="changeTF('Day')">日線 (D)</button>
+      <button class="tf-btn" id="tf-60m" onclick="changeTF('60m')">4小時/1小時</button>
     </div>
-    <button onclick="analyzeStock()">開始跑分</button>
   </div>
 
-  <div id="loading" class="loading">⏳ 正在對接 FinMind 抓取 K 線、籌碼與新聞並進行指標繪圖...</div>
+  <div id="loading" class="loading">⏳ 正在抓取多時框數據、進行 K 線型態辨識與繪製斐波那契指標...</div>
 
+  <!-- 分析結果 -->
   <div class="card" id="resultCard" style="display:none;">
     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
       <div>
@@ -56,11 +77,12 @@
           <span id="stockTitle"></span>
           <span style="font-size: 18px; margin-left: 10px;" id="signalText"></span>
         </h3>
-        <p style="font-size: 13px; color: #787b86; margin-top: 4px;">滿分 100 分，低於 50 分為偏空/高風險；高於 60 分具卡位價值</p>
+        <p style="font-size: 13px; color: #787b86; margin-top: 4px;">基準分 50 分 | 包含 K 線型態、SMC 缺口、威科夫 Spring 與三大法人加扣分明細</p>
       </div>
       <div id="scoreBadge" class="score-badge"></div>
     </div>
 
+    <!-- 交易規劃點位 -->
     <div class="plan-grid">
       <div class="plan-box"><div>建議位 (Close)</div><div id="pEntry" style="color:#2962ff;">-</div></div>
       <div class="plan-box"><div>建議止損位</div><div id="pStop" style="color:#f23645;">-</div></div>
@@ -68,20 +90,29 @@
       <div class="plan-box"><div>預設盈虧比</div><div id="pRR">-</div></div>
     </div>
 
-    <h4 style="margin-top: 15px; color: #fff;">💡 跑分邏輯與風控說明：</h4>
-    <ul id="reasonsList" class="reasons-list"></ul>
+    <!-- 加減分與原因明細 -->
+    <h4 style="margin-top: 18px; color: #fff;">⚖️ 加減分權重與分析依據明細：</h4>
+    <div id="reasonsContainer" style="margin-top: 8px;"></div>
   </div>
 
-  <div class="card">
+  <!-- K 線圖表 -->
+  <div class="card" style="position: relative;">
     <div style="display: flex; justify-content: space-between; align-items: center;">
       <h3 style="color: #fff;" id="chartTitle">📉 互動 K 線圖</h3>
-      <span style="font-size: 12px; color: #787b86;">手機支援雙指手勢 / 電腦支援滾輪縮放</span>
+      <span style="font-size: 12px; color: #787b86;">手機支援雙指縮放 / 電腦支援滾輪縮放</span>
     </div>
+    
+    <!-- 圖表疊加中文技術說明 -->
+    <div class="chart-info-overlay" id="chartOverlay">
+      📌 <b>技術說明：</b>紅色虛線為波段高點(BOS)，綠色虛線為波段低點/折扣區(Discount Zone)。
+    </div>
+
     <div id="chart-container"></div>
   </div>
 
+  <!-- 新聞情報 -->
   <div class="card" id="newsCard" style="display:none;">
-    <h3 style="color: #fff; margin-bottom: 10px;">📰 最新相關新聞情報</h3>
+    <h3 style="color: #fff; margin-bottom: 10px;">📰 最新個股新聞情報</h3>
     <div id="newsList"></div>
   </div>
 </div>
@@ -90,8 +121,16 @@
   let chart = null;
   let candlestickSeries = null;
   let priceLines = [];
+  let currentTF = 'Day';
 
   const WORKER_URL = "https://stock-api.senmao.workers.dev";
+
+  function changeTF(tf) {
+    currentTF = tf;
+    document.querySelectorAll('.tf-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(`tf-${tf}`).classList.add('active');
+    analyzeStock();
+  }
 
   function initChart() {
     const container = document.getElementById('chart-container');
@@ -99,14 +138,10 @@
 
     chart = LightweightCharts.createChart(container, {
       width: container.clientWidth,
-      height: 460,
+      height: 480,
       layout: { backgroundColor: '#1e222d', textColor: '#d1d4dc' },
       grid: { vertLines: { color: '#2b2e3a' }, horzLines: { color: '#2b2e3a' } },
-      timeScale: {
-        pinchZoom: true,
-        mouseWheel: true,
-        timeVisible: true
-      }
+      timeScale: { pinchZoom: true, mouseWheel: true, timeVisible: true }
     });
 
     candlestickSeries = chart.addCandlestickSeries({
@@ -132,11 +167,11 @@
     if (!fib) return;
 
     const lines = [
-      { price: fib.swing_high, color: '#f23645', title: 'Swing High (1.0)' },
-      { price: fib.fib_0382, color: '#e2a000', title: 'Fib 0.382' },
-      { price: fib.fib_0500, color: '#2962ff', title: 'Fib 0.500' },
-      { price: fib.fib_0618, color: '#089981', title: 'Fib 0.618 (Discount)' },
-      { price: fib.swing_low, color: '#089981', title: 'Swing Low (0.0)' }
+      { price: fib.swing_high, color: '#f23645', title: '高點 (Swing High / BOS)' },
+      { price: fib.fib_0382, color: '#e2a000', title: '斐波 0.382' },
+      { price: fib.fib_0500, color: '#2962ff', title: '斐波 0.500 (等價位)' },
+      { price: fib.fib_0618, color: '#089981', title: '斐波 0.618 (折扣進場區)' },
+      { price: fib.swing_low, color: '#089981', title: '低點 (Swing Low / 止損線)' }
     ];
 
     lines.forEach(l => {
@@ -160,7 +195,6 @@
     const newsCard = document.getElementById('newsCard');
 
     if (!stockId) return alert('請輸入股票代碼');
-
     if (!chart || !candlestickSeries) initChart();
 
     loading.style.display = 'block';
@@ -168,43 +202,51 @@
     newsCard.style.display = 'none';
 
     try {
-      const res = await fetch(`${WORKER_URL}/?stock_id=${stockId}&rr=${rr}`);
+      const res = await fetch(`${WORKER_URL}/?stock_id=${stockId}&rr=${rr}&timeframe=${currentTF}`);
       const data = await res.json();
 
       if (data.error) throw new Error(data.error);
 
-      // 1. 繪製 K 線與黃金分割線
+      // 1. K線與指標繪圖
       if (candlestickSeries && data.kline && data.kline.length > 0) {
         candlestickSeries.setData(data.kline);
         chart.timeScale().fitContent();
         drawFibonacciLines(data.fibonacci_levels);
       }
 
-      // 2. 顯示股票代碼與中文名稱
+      // 2. 抬頭資訊
       const displayName = data.stock_name ? `${data.stock_id} ${data.stock_name}` : data.stock_id;
-      document.getElementById('stockTitle').innerText = displayName;
-      document.getElementById('chartTitle').innerText = `📉 ${displayName} K 線圖 (含斐波那契指標)`;
+      const tfText = currentTF === 'Day' ? '日線' : '小時線';
+      document.getElementById('stockTitle').innerText = `${displayName} (${tfText})`;
+      document.getElementById('chartTitle').innerText = `📉 ${displayName} [${tfText}] K 線圖`;
 
-      // 3. 跑分與訊號
+      // 3. 跑分與標籤
       document.getElementById('signalText').innerText = `[${data.signal}]`;
       const badge = document.getElementById('scoreBadge');
       badge.innerText = `${data.score} 分`;
       badge.className = `score-badge ${data.score >= 60 ? 'score-high' : data.score <= 45 ? 'score-low' : 'score-mid'}`;
 
-      // 4. 交易點位
+      // 4. 點位
       document.getElementById('pEntry').innerText = `$${data.trade_plan.entry}`;
       document.getElementById('pStop').innerText = `$${data.trade_plan.stop_loss}`;
       document.getElementById('pTake').innerText = `$${data.trade_plan.take_profit}`;
       document.getElementById('pRR').innerText = `1 : ${data.trade_plan.rr_ratio}`;
 
-      // 5. 原因分析
-      const reasonsList = document.getElementById('reasonsList');
-      reasonsList.innerHTML = '';
-      data.reasons.forEach(r => {
-        const li = document.createElement('li');
-        li.innerText = r;
-        reasonsList.appendChild(li);
-      });
+      // 5. 加減分明細渲染
+      const reasonsContainer = document.getElementById('reasonsContainer');
+      reasonsContainer.innerHTML = '';
+      if (data.score_breakdown && data.score_breakdown.length > 0) {
+        data.score_breakdown.forEach(item => {
+          const div = document.createElement('div');
+          div.className = 'reason-item';
+          const isPlus = item.type === 'PLUS';
+          div.innerHTML = `
+            <span class="delta-tag ${isPlus ? 'tag-plus' : 'tag-minus'}">${item.delta}</span>
+            <span>${item.reason}</span>
+          `;
+          reasonsContainer.appendChild(div);
+        });
+      }
 
       // 6. 新聞清單
       const newsListContainer = document.getElementById('newsList');
