@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>自用 SMC & 威科夫 選股跑分系統</title>
+  <!-- 引入 TradingView Lightweight Charts -->
+  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #131722; color: #d1d4dc; padding: 15px; }
+    .container { max-width: 1000px; margin: 0 auto; }
+    .card { background: #1e222d; border-radius: 8px; padding: 15px; margin-bottom: 15px; border: 1px solid #2a2e39; }
+    .control-panel { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    input, button { padding: 10px 14px; border-radius: 6px; border: 1px solid #363a45; background: #2a2e39; color: #fff; font-size: 15px; }
+    input { width: 110px; }
+    button { background: #2962ff; border: none; cursor: pointer; font-weight: bold; flex-grow: 1; max-width: 150px; }
+    button:hover { background: #1e4bd8; }
+    #chart-container { height: 420px; width: 100%; position: relative; margin-top: 10px; }
+    .score-badge { display: inline-block; padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 18px; margin-left: 10px; }
+    .score-high { background: #089981; color: #fff; }
+    .score-low { background: #f23645; color: #fff; }
+    .score-mid { background: #787b86; color: #fff; }
+    .plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-top: 10px; text-align: center; }
+    .plan-box { background: #2a2e39; padding: 10px; border-radius: 6px; }
+    .plan-box div:first-child { font-size: 12px; color: #787b86; margin-bottom: 4px; }
+    .plan-box div:last-child { font-size: 16px; font-weight: bold; }
+    ul.reasons-list { margin-top: 10px; padding-left: 20px; font-size: 14px; line-height: 1.6; color: #b2b5be; }
+    .loading { text-align: center; padding: 20px; color: #2962ff; font-size: 16px; display: none; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2 style="margin-bottom: 15px; color: #fff;">📊 SMC & 威科夫選股分析儀</h2>
+
+  <!-- 控制面板 -->
+  <div class="card control-panel">
+    <div>
+      <label>股票代碼：</label>
+      <input type="text" id="stockId" value="2330" placeholder="例如 2330">
+    </div>
+    <div>
+      <label>設定盈虧比 (R:R)：</label>
+      <input type="number" id="rrRatio" value="3.0" step="0.5" min="1">
+    </div>
+    <button onclick="analyzeStock()">開始跑分</button>
+  </div>
+
+  <div id="loading" class="loading">⏳ 正在對接 FinMind 抓取歷史 K 線、籌碼與新聞分析中...</div>
+
+  <!-- 分析結果 -->
+  <div class="card" id="resultCard" style="display:none;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h3>跑分結果：<span id="signalText"></span></h3>
+      <div id="scoreBadge" class="score-badge"></div>
+    </div>
+
+    <!-- 交易規劃 -->
+    <div class="plan-grid">
+      <div class="plan-box"><div>建議進場位</div><div id="pEntry" style="color:#2962ff;">-</div></div>
+      <div class="plan-box"><div>建議止損位</div><div id="pStop" style="color:#f23645;">-</div></div>
+      <div class="plan-box"><div>目標止盈位</div><div id="pTake" style="color:#089981;">-</div></div>
+      <div class="plan-box"><div>預設盈虧比</div><div id="pRR">-</div></div>
+    </div>
+
+    <!-- 分析原因 -->
+    <h4 style="margin-top: 15px; color: #fff;">跑分依據與訊號說明：</h4>
+    <ul id="reasonsList" class="reasons-list"></ul>
+  </div>
+
+  <!-- K 線圖表 -->
+  <div class="card">
+    <h3 style="color: #fff; margin-bottom: 10px;">互動式 K 線圖 (支援手機/電腦縮放)</h3>
+    <div id="chart-container"></div>
+  </div>
+</div>
+
+<script>
+  let chart, candlestickSeries;
+
+  // 初始化 TradingView 圖表
+  function initChart() {
+    const container = document.getElementById('chart-container');
+    chart = LightweightCharts.createChart(container, {
+      width: container.clientWidth,
+      height: 420,
+      layout: { backgroundColor: '#1e222d', textColor: '#d1d4dc' },
+      grid: { vertLines: { color: '#2b2e3a' }, horzLines: { color: '#2b2e3a' } },
+      timeScale: {
+        pinchZoom: true,       // 支援手機雙指手勢縮放
+        mouseWheel: true,      // 支援電腦滾輪縮放
+        timeVisible: true
+      }
+    });
+
+    candlestickSeries = chart.addCandlestickSeries({
+      upColor: '#089981', downColor: '#f23645',
+      borderUpColor: '#089981', borderDownColor: '#f23645',
+      wickUpColor: '#089981', wickDownColor: '#f23645'
+    });
+
+    window.addEventListener('resize', () => {
+      chart.applyOptions({ width: container.clientWidth });
+    });
+  }
+
+  async function analyzeStock() {
+    const stockId = document.getElementById('stockId').value.trim();
+    const rr = document.getElementById('rrRatio').value;
+    const loading = document.getElementById('loading');
+    const resultCard = document.getElementById('resultCard');
+
+    if (!stockId) return alert('請輸入股票代碼');
+
+    loading.style.display = 'block';
+    resultCard.style.display = 'none';
+
+    // 替換成你部署後的 Cloudflare Worker URL (例如: https://my-worker.xxxx.workers.dev)
+    const WORKER_URL = "https://stock-api.senmao.workers.dev/"; 
+
+    try {
+      const res = await fetch(`${WORKER_URL}/?stock_id=${stockId}&rr=${rr}`);
+      const data = await res.json();
+
+      if (data.error) throw new Error(data.error);
+
+      // 1. 渲染 K 線
+      candlestickSeries.setData(data.kline);
+      chart.timeScale().fitContent();
+
+      // 2. 渲染分數與訊號
+      document.getElementById('signalText').innerText = data.signal;
+      const badge = document.getElementById('scoreBadge');
+      badge.innerText = `${data.score} 分`;
+      badge.className = `score-badge ${data.score >= 60 ? 'score-high' : data.score <= 40 ? 'score-low' : 'score-mid'}`;
+
+      // 3. 渲染交易規劃
+      document.getElementById('pEntry').innerText = `$${data.trade_plan.entry}`;
+      document.getElementById('pStop').innerText = `$${data.trade_plan.stop_loss}`;
+      document.getElementById('pTake').innerText = `$${data.trade_plan.take_profit}`;
+      document.getElementById('pRR').innerText = `1 : ${data.trade_plan.rr_ratio}`;
+
+      // 4. 渲染原因
+      const reasonsList = document.getElementById('reasonsList');
+      reasonsList.innerHTML = '';
+      data.reasons.forEach(r => {
+        const li = document.createElement('li');
+        li.innerText = r;
+        reasonsList.appendChild(li);
+      });
+
+      resultCard.style.display = 'block';
+    } catch (err) {
+      alert('分析失敗：' + err.message);
+    } finally {
+      loading.style.display = 'none';
+    }
+  }
+
+  // 頁面載入完成後初始化圖表
+  window.onload = () => {
+    initChart();
+  };
+</script>
+
+</body>
+</html>
