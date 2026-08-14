@@ -154,7 +154,7 @@
     </div>
   </div>
 
-  <div id="loading" class="loading">⏳ 正在同步技術面、基本面與最新新聞情報...</div>
+  <div id="loading" class="loading">⏳ 正在同步 4H/45M/5M 機構腳印與最新情報...</div>
 
   <div class="card" id="resultCard" style="display:none;">
     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
@@ -182,7 +182,7 @@
     </div>
 
     <div style="margin-top: 15px; padding: 12px; background: #262b38; border-radius: 6px; border-left: 4px solid #2962ff;">
-      <h4 style="color: #fff; margin-bottom: 6px;">💡 TRADING HELPER 操盤具體策略建議：</h4>
+      <h4 style="color: #fff; margin-bottom: 6px;">💡 TRADING HELPER 機構腳印協同策略建議：</h4>
       <p id="strategyAdvice" style="font-size: 14px; color: #d1d4dc; line-height: 1.6;"></p>
     </div>
 
@@ -201,11 +201,11 @@
       
       <div class="toggle-group">
         <span style="font-size: 12px; color: #787b86;">圖示開關：</span>
-        <button id="btnToggleOB" class="toggle-btn active" onclick="toggleOverlay('OB')">SMC 訂單塊</button>
+        <button id="btnToggleOB" class="toggle-btn active" onclick="toggleOverlay('OB')">機構 OB</button>
         <button id="btnToggleWyckoff" class="toggle-btn active" onclick="toggleOverlay('WYCKOFF')">威科夫箱體</button>
-        <button id="btnToggleLines" class="toggle-btn active" onclick="toggleOverlay('LINES')">關卡水平線</button>
-        <button id="btnToggleFibRet" class="toggle-btn active" onclick="toggleOverlay('FIB_RET')">FIB 回撤</button>
-        <button id="btnToggleFibExt" class="toggle-btn active" onclick="toggleOverlay('FIB_EXT')">FIB 擴展</button>
+        <button id="btnToggleLines" class="toggle-btn active" onclick="toggleOverlay('LINES')">關鍵關卡</button>
+        <button id="btnToggleFibRet" class="toggle-btn active" onclick="toggleOverlay('FIB_RET')">4H FIB 回撤</button>
+        <button id="btnToggleFibExt" class="toggle-btn active" onclick="toggleOverlay('FIB_EXT')">4H FIB 擴展</button>
       </div>
     </div>
 
@@ -294,13 +294,9 @@
       layout: { backgroundColor: '#1e222d', textColor: '#d1d4dc' },
       grid: { vertLines: { color: '#2b2e3a' }, horzLines: { color: '#2b2e3a' } },
       timeScale: { pinchZoom: true, mouseWheel: true, timeVisible: true },
-      // 🚀 關鍵修復：啟用 Y 軸動態自動縮放，並設定上下留白邊距以徹底消除下方 0.00 死區
       rightPriceScale: {
         autoScale: true,
-        scaleMargins: {
-          top: 0.15,
-          bottom: 0.15,
-        },
+        scaleMargins: { top: 0.15, bottom: 0.15 },
       },
       localization: {
         dateFormat: 'yyyy/MM/dd',
@@ -337,7 +333,7 @@
     if (type === 'OB') {
       showOB = !showOB;
       document.getElementById('btnToggleOB').classList.toggle('active', showOB);
-      addLog('DEBUG', `切換圖層 SMC 訂單塊: ${showOB}`);
+      addLog('DEBUG', `切換圖層 機構 OB: ${showOB}`);
     } else if (type === 'WYCKOFF') {
       showWyckoff = !showWyckoff;
       document.getElementById('btnToggleWyckoff').classList.toggle('active', showWyckoff);
@@ -345,7 +341,7 @@
     } else if (type === 'LINES') {
       showLines = !showLines;
       document.getElementById('btnToggleLines').classList.toggle('active', showLines);
-      addLog('DEBUG', `切換圖層 關卡水平線: ${showLines}`);
+      addLog('DEBUG', `切換圖層 關鍵關卡: ${showLines}`);
       if (showLines && rawResponseData) renderPriceLines(rawResponseData.price_lines);
       else clearPriceLines();
     } else if (type === 'FIB_RET') {
@@ -548,7 +544,7 @@
     const resultCard = document.getElementById('resultCard');
     const newsCard = document.getElementById('newsCard');
 
-    addLog('INFO', `準備發起量化分析請求`, { stockId, timeframe, rr });
+    addLog('INFO', `準備發起多時間框架機構腳印分析請求`, { stockId, timeframe, rr });
 
     if (!stockId) {
       addLog('WARN', '使用者未輸入股票代碼');
@@ -610,7 +606,7 @@
       document.getElementById('fundPB').innerText = f.pb_ratio || 'N/F';
       document.getElementById('fundYield').innerText = f.div_yield || 'N/F';
 
-      document.getElementById('chartTitle').innerText = `📉 ${displayName} K 線圖`;
+      document.getElementById('chartTitle').innerText = `📉 ${displayName} 4H/45M/5M 機構腳印與量化圖表`;
 
       document.getElementById('signalText').innerText = `[${data.signal}]`;
       const badge = document.getElementById('scoreBadge');
@@ -666,7 +662,7 @@
       }
 
       resultCard.style.display = 'block';
-      addLog('INFO', '個股分析渲染完畢');
+      addLog('INFO', '多時間框架機構腳印分析渲染完畢');
     } catch (err) {
       addLog('ERROR', `分析過程發生例外錯誤: ${err.message}`, err.stack);
       alert('分析失敗：' + err.message);
